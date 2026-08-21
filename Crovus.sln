@@ -1,0 +1,16 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Crovus", "Crovus.csproj", "{0E0F4184-860E-4B29-9515-12F5A6F1CC3C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0E0F4184-860E-4B29-9515-12F5A6F1CC3C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0E0F4184-860E-4B29-9515-12F5A6F1CC3C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0E0F4184-860E-4B29-9515-12F5A6F1CC3C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0E0F4184-860E-4B29-9515-12F5A6F1CC3C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
