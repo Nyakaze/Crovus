@@ -13,59 +13,177 @@ public abstract record DiscordEvent
 }
 
 public sealed record ReadyEvent(DiscordUser User, Snowflake? ApplicationId, string SessionId, string? ResumeUrl)
-    : DiscordEvent;
+    : DiscordEvent
+{
+    public IReadOnlyList<DiscordGuild> Guilds { get; init; } = [];
+
+    public Snowflake UserId => User.Id;
+}
 
 public sealed record ResumedEvent : DiscordEvent;
 
-public sealed record MessageCreatedEvent(DiscordMessage Message) : DiscordEvent
+public sealed record MessageCreatedEvent(DiscordMessage Message, DiscordChannel Channel, DiscordGuild? Guild)
+    : DiscordEvent
 {
-    public Snowflake ChannelId => Message.ChannelId;
+    public DiscordMember? Member { get; init; }
+
+    public DiscordUser Author => Message.Author;
 
     public Snowflake MessageId => Message.Id;
+
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
+
+    public string Content => Message.Content;
+
+    public bool IsDirect => Guild is null;
 }
 
-public sealed record MessageUpdatedEvent(Snowflake MessageId, Snowflake ChannelId, Snowflake? GuildId,
-    DiscordMessage? Message) : DiscordEvent
+public sealed record MessageUpdatedEvent(DiscordMessage Message, DiscordChannel Channel, DiscordGuild? Guild)
+    : DiscordEvent
 {
-    public bool IsPartial => Message is null;
+    public DiscordMessage? Previous { get; init; }
+
+    public DiscordUser? Author => Message.IsPartial ? null : Message.Author;
+
+    public Snowflake MessageId => Message.Id;
+
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
+
+    public bool IsPartial => Message.IsPartial;
 }
 
-public sealed record MessageDeletedEvent(Snowflake MessageId, Snowflake ChannelId, Snowflake? GuildId)
-    : DiscordEvent;
-
-public sealed record MessagesBulkDeletedEvent(IReadOnlyList<Snowflake> MessageIds, Snowflake ChannelId,
-    Snowflake? GuildId) : DiscordEvent
+public sealed record MessageDeletedEvent(DiscordMessage Message, DiscordChannel Channel, DiscordGuild? Guild)
+    : DiscordEvent
 {
-    public int Count => MessageIds.Count;
+    public Snowflake MessageId => Message.Id;
+
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
+
+    public bool WasCached => !Message.IsPartial;
 }
 
-public sealed record ReactionAddedEvent(Snowflake MessageId, Snowflake ChannelId, Snowflake UserId,
-    Snowflake? GuildId, DiscordEmoji Emoji) : DiscordEvent;
+public sealed record MessagesBulkDeletedEvent(IReadOnlyList<DiscordMessage> Messages, DiscordChannel Channel,
+    DiscordGuild? Guild) : DiscordEvent
+{
+    public int Count => Messages.Count;
 
-public sealed record ReactionRemovedEvent(Snowflake MessageId, Snowflake ChannelId, Snowflake UserId,
-    Snowflake? GuildId, DiscordEmoji Emoji) : DiscordEvent;
+    public IReadOnlyList<Snowflake> MessageIds => [.. Messages.Select(message => message.Id)];
 
-public sealed record ReactionsClearedEvent(Snowflake MessageId, Snowflake ChannelId, Snowflake? GuildId)
-    : DiscordEvent;
+    public IReadOnlyList<DiscordMessage> Cached => [.. Messages.Where(message => !message.IsPartial)];
 
-public sealed record ReactionEmojiClearedEvent(Snowflake MessageId, Snowflake ChannelId, Snowflake? GuildId,
-    DiscordEmoji Emoji) : DiscordEvent;
+    public Snowflake ChannelId => Channel.Id;
 
-public sealed record ChannelCreatedEvent(DiscordChannel Channel) : DiscordEvent;
+    public Snowflake? GuildId => Guild?.Id;
+}
 
-public sealed record ChannelUpdatedEvent(DiscordChannel Channel) : DiscordEvent;
+public sealed record ReactionAddedEvent(DiscordMessage Message, DiscordChannel Channel, DiscordUser User,
+    DiscordGuild? Guild, DiscordEmoji Emoji) : DiscordEvent
+{
+    public DiscordMember? Member { get; init; }
 
-public sealed record ChannelDeletedEvent(Snowflake ChannelId, Snowflake? GuildId, DiscordChannel? Channel)
-    : DiscordEvent;
+    public Snowflake MessageId => Message.Id;
 
-public sealed record ThreadCreatedEvent(DiscordChannel Thread) : DiscordEvent;
+    public Snowflake ChannelId => Channel.Id;
 
-public sealed record ThreadUpdatedEvent(DiscordChannel Thread) : DiscordEvent;
+    public Snowflake UserId => User.Id;
 
-public sealed record ThreadDeletedEvent(Snowflake ThreadId, Snowflake? ParentId, Snowflake? GuildId) : DiscordEvent;
+    public Snowflake? GuildId => Guild?.Id;
+}
 
-public sealed record GuildAvailableEvent(Snowflake GuildId, IReadOnlyList<DiscordChannel> Channels,
-    DiscordGuild? Guild = null) : DiscordEvent
+public sealed record ReactionRemovedEvent(DiscordMessage Message, DiscordChannel Channel, DiscordUser User,
+    DiscordGuild? Guild, DiscordEmoji Emoji) : DiscordEvent
+{
+    public DiscordMember? Member { get; init; }
+
+    public Snowflake MessageId => Message.Id;
+
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake UserId => User.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
+}
+
+public sealed record ReactionsClearedEvent(DiscordMessage Message, DiscordChannel Channel, DiscordGuild? Guild)
+    : DiscordEvent
+{
+    public Snowflake MessageId => Message.Id;
+
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
+}
+
+public sealed record ReactionEmojiClearedEvent(DiscordMessage Message, DiscordChannel Channel, DiscordGuild? Guild,
+    DiscordEmoji Emoji) : DiscordEvent
+{
+    public Snowflake MessageId => Message.Id;
+
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
+}
+
+public sealed record ChannelCreatedEvent(DiscordChannel Channel, DiscordGuild? Guild) : DiscordEvent
+{
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
+}
+
+public sealed record ChannelUpdatedEvent(DiscordChannel Channel, DiscordGuild? Guild) : DiscordEvent
+{
+    public DiscordChannel? Previous { get; init; }
+
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
+}
+
+public sealed record ChannelDeletedEvent(DiscordChannel Channel, DiscordGuild? Guild) : DiscordEvent
+{
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
+}
+
+public sealed record ThreadCreatedEvent(DiscordChannel Thread, DiscordChannel? Parent, DiscordGuild? Guild)
+    : DiscordEvent
+{
+    public Snowflake ThreadId => Thread.Id;
+
+    public Snowflake? ParentId => Parent?.Id ?? Thread.ParentId;
+
+    public Snowflake? GuildId => Guild?.Id;
+}
+
+public sealed record ThreadUpdatedEvent(DiscordChannel Thread, DiscordChannel? Parent, DiscordGuild? Guild)
+    : DiscordEvent
+{
+    public Snowflake ThreadId => Thread.Id;
+
+    public Snowflake? ParentId => Parent?.Id ?? Thread.ParentId;
+
+    public Snowflake? GuildId => Guild?.Id;
+}
+
+public sealed record ThreadDeletedEvent(DiscordChannel Thread, DiscordChannel? Parent, DiscordGuild? Guild)
+    : DiscordEvent
+{
+    public Snowflake ThreadId => Thread.Id;
+
+    public Snowflake? ParentId => Parent?.Id ?? Thread.ParentId;
+
+    public Snowflake? GuildId => Guild?.Id;
+}
+
+public sealed record GuildAvailableEvent(DiscordGuild Guild, IReadOnlyList<DiscordChannel> Channels) : DiscordEvent
 {
     public IReadOnlyList<DiscordPresence> Presences { get; init; } = [];
 
@@ -79,53 +197,128 @@ public sealed record GuildAvailableEvent(Snowflake GuildId, IReadOnlyList<Discor
 
     public IReadOnlyList<DiscordStageInstance> StageInstances { get; init; } = [];
 
-    public string GuildName => Guild?.Name ?? string.Empty;
+    public IReadOnlyList<DiscordMember> Members { get; init; } = [];
 
-    public IReadOnlyList<DiscordRole> Roles => Guild?.Roles ?? [];
+    public Snowflake GuildId => Guild.Id;
 
-    public int? MemberCount => Guild?.MemberCount;
+    public string GuildName => Guild.Name;
+
+    public IReadOnlyList<DiscordRole> Roles => Guild.Roles;
+
+    public int? MemberCount => Guild.MemberCount;
 }
 
 public sealed record GuildUpdatedEvent(DiscordGuild Guild) : DiscordEvent
 {
+    public DiscordGuild? Previous { get; init; }
+
     public Snowflake GuildId => Guild.Id;
 }
 
-public sealed record GuildUnavailableEvent(Snowflake GuildId, bool Removed) : DiscordEvent;
-
-public sealed record MemberJoinedEvent(Snowflake GuildId, DiscordMember Member) : DiscordEvent
+public sealed record GuildUnavailableEvent(DiscordGuild Guild, bool Removed) : DiscordEvent
 {
-    public DiscordUser User => Member.User;
+    public Snowflake GuildId => Guild.Id;
 }
 
-public sealed record MemberUpdatedEvent(Snowflake GuildId, DiscordMember Member) : DiscordEvent
+public sealed record MemberJoinedEvent(DiscordGuild Guild, DiscordMember Member) : DiscordEvent
 {
     public DiscordUser User => Member.User;
+
+    public Snowflake GuildId => Guild.Id;
+
+    public Snowflake UserId => Member.User.Id;
 }
 
-public sealed record MemberLeftEvent(Snowflake GuildId, DiscordUser User) : DiscordEvent;
+public sealed record MemberUpdatedEvent(DiscordGuild Guild, DiscordMember Member) : DiscordEvent
+{
+    public DiscordMember? Previous { get; init; }
 
-public sealed record RoleCreatedEvent(Snowflake GuildId, DiscordRole Role) : DiscordEvent;
+    public DiscordUser User => Member.User;
 
-public sealed record RoleUpdatedEvent(Snowflake GuildId, DiscordRole Role) : DiscordEvent;
+    public Snowflake GuildId => Guild.Id;
 
-public sealed record RoleDeletedEvent(Snowflake GuildId, Snowflake RoleId) : DiscordEvent;
+    public Snowflake UserId => Member.User.Id;
+}
 
-public sealed record BanAddedEvent(Snowflake GuildId, DiscordUser User) : DiscordEvent;
+public sealed record MemberLeftEvent(DiscordGuild Guild, DiscordUser User) : DiscordEvent
+{
+    public DiscordMember? Member { get; init; }
 
-public sealed record BanRemovedEvent(Snowflake GuildId, DiscordUser User) : DiscordEvent;
+    public Snowflake GuildId => Guild.Id;
 
-public sealed record WebhooksUpdatedEvent(Snowflake ChannelId, Snowflake? GuildId) : DiscordEvent;
+    public Snowflake UserId => User.Id;
+}
 
-public sealed record TypingStartedEvent(Snowflake ChannelId, Snowflake UserId, Snowflake? GuildId) : DiscordEvent;
+public sealed record RoleCreatedEvent(DiscordGuild Guild, DiscordRole Role) : DiscordEvent
+{
+    public Snowflake GuildId => Guild.Id;
 
-public sealed record InteractionCreatedEvent(DiscordInteraction Interaction) : DiscordEvent
+    public Snowflake RoleId => Role.Id;
+}
+
+public sealed record RoleUpdatedEvent(DiscordGuild Guild, DiscordRole Role) : DiscordEvent
+{
+    public DiscordRole? Previous { get; init; }
+
+    public Snowflake GuildId => Guild.Id;
+
+    public Snowflake RoleId => Role.Id;
+}
+
+public sealed record RoleDeletedEvent(DiscordGuild Guild, DiscordRole Role) : DiscordEvent
+{
+    public Snowflake GuildId => Guild.Id;
+
+    public Snowflake RoleId => Role.Id;
+
+    public bool WasCached => !Role.IsPartial;
+}
+
+public sealed record BanAddedEvent(DiscordGuild Guild, DiscordUser User) : DiscordEvent
+{
+    public DiscordMember? Member { get; init; }
+
+    public Snowflake GuildId => Guild.Id;
+
+    public Snowflake UserId => User.Id;
+}
+
+public sealed record BanRemovedEvent(DiscordGuild Guild, DiscordUser User) : DiscordEvent
+{
+    public Snowflake GuildId => Guild.Id;
+
+    public Snowflake UserId => User.Id;
+}
+
+public sealed record WebhooksUpdatedEvent(DiscordChannel Channel, DiscordGuild? Guild) : DiscordEvent
+{
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
+}
+
+public sealed record TypingStartedEvent(DiscordChannel Channel, DiscordUser User, DiscordGuild? Guild)
+    : DiscordEvent
+{
+    public DiscordMember? Member { get; init; }
+
+    public DateTimeOffset? StartedAt { get; init; }
+
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake UserId => User.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
+}
+
+public sealed record InteractionCreatedEvent(DiscordInteraction Interaction, DiscordChannel? Channel,
+    DiscordGuild? Guild) : DiscordEvent
 {
     public InteractionType InteractionType => Interaction.Type;
 
-    public Snowflake? ChannelId => Interaction.ChannelId;
+    public Snowflake? ChannelId => Channel?.Id ?? Interaction.ChannelId;
 
-    public Snowflake? GuildId => Interaction.GuildId;
+    public Snowflake? GuildId => Guild?.Id ?? Interaction.GuildId;
 
     public DiscordUser? Invoker => Interaction.Invoker;
 
@@ -136,11 +329,19 @@ public sealed record InteractionCreatedEvent(DiscordInteraction Interaction) : D
 
 public sealed record PresenceUpdatedEvent(DiscordPresence Presence, DiscordPresence? Previous) : DiscordEvent
 {
+    private readonly DiscordUser? _user;
+
+    public DiscordGuild? Guild { get; init; }
+
+    public DiscordUser User
+    {
+        get => _user ?? Presence.User ?? DiscordUser.Partial(Presence.UserId);
+        init => _user = value;
+    }
+
     public Snowflake UserId => Presence.UserId;
 
-    public Snowflake? GuildId => Presence.GuildId;
-
-    public DiscordUser? User => Presence.User;
+    public Snowflake? GuildId => Guild?.Id ?? Presence.GuildId;
 
     public UserStatus Status => Presence.Status;
 
@@ -180,17 +381,22 @@ public sealed record PresenceUpdatedEvent(DiscordPresence Presence, DiscordPrese
     }
 }
 
-public sealed record VoiceStateUpdatedEvent(DiscordVoiceState VoiceState) : DiscordEvent
+public sealed record VoiceStateUpdatedEvent(DiscordVoiceState VoiceState, DiscordUser User, DiscordGuild? Guild)
+    : DiscordEvent
 {
     public DiscordVoiceState? Previous { get; init; }
 
+    public DiscordChannel? Channel { get; init; }
+
+    public DiscordChannel? PreviousChannel { get; init; }
+
     public Snowflake UserId => VoiceState.UserId;
 
-    public Snowflake? GuildId => VoiceState.GuildId;
+    public Snowflake? GuildId => Guild?.Id ?? VoiceState.GuildId;
 
-    public Snowflake? ChannelId => VoiceState.ChannelId;
+    public Snowflake? ChannelId => Channel?.Id ?? VoiceState.ChannelId;
 
-    public Snowflake? PreviousChannelId => Previous?.ChannelId;
+    public Snowflake? PreviousChannelId => PreviousChannel?.Id ?? Previous?.ChannelId;
 
     public DiscordMember? Member => VoiceState.Member;
 
@@ -214,129 +420,192 @@ public sealed record VoiceStateUpdatedEvent(DiscordVoiceState VoiceState) : Disc
                                (Previous.Deaf != VoiceState.Deaf || Previous.SelfDeaf != VoiceState.SelfDeaf);
 }
 
-public sealed record VoiceServerUpdatedEvent(Snowflake GuildId, string Token, string? Endpoint) : DiscordEvent
+public sealed record VoiceServerUpdatedEvent(DiscordGuild Guild, string Token, string? Endpoint) : DiscordEvent
 {
+    public Snowflake GuildId => Guild.Id;
+
     public bool IsAwaitingEndpoint => Endpoint is null;
 }
 
-public sealed record GuildMembersChunkEvent(Snowflake GuildId, IReadOnlyList<DiscordMember> Members,
+public sealed record GuildMembersChunkEvent(DiscordGuild Guild, IReadOnlyList<DiscordMember> Members,
     int ChunkIndex, int ChunkCount) : DiscordEvent
 {
-    public IReadOnlyList<Snowflake> NotFound { get; init; } = [];
+    public IReadOnlyList<DiscordUser> NotFound { get; init; } = [];
 
     public IReadOnlyList<DiscordPresence> Presences { get; init; } = [];
 
     public string? Nonce { get; init; }
+
+    public Snowflake GuildId => Guild.Id;
 
     public bool IsLastChunk => ChunkIndex + 1 >= ChunkCount;
 
     public int Count => Members.Count;
 }
 
-public sealed record ThreadListSyncEvent(Snowflake GuildId, IReadOnlyList<DiscordChannel> Threads,
-    IReadOnlyList<DiscordThreadMember> Members, IReadOnlyList<Snowflake> ChannelIds) : DiscordEvent
+public sealed record ThreadListSyncEvent(DiscordGuild Guild, IReadOnlyList<DiscordChannel> Threads,
+    IReadOnlyList<DiscordThreadMember> Members, IReadOnlyList<DiscordChannel> Channels) : DiscordEvent
 {
-    public bool IsWholeGuild => ChannelIds.Count == 0;
+    public Snowflake GuildId => Guild.Id;
+
+    public bool IsWholeGuild => Channels.Count == 0;
 }
 
-public sealed record ThreadMemberUpdatedEvent(DiscordThreadMember Member) : DiscordEvent
+public sealed record ThreadMemberUpdatedEvent(DiscordThreadMember Member, DiscordChannel? Thread,
+    DiscordGuild? Guild) : DiscordEvent
 {
-    public Snowflake? ThreadId => Member.ThreadId;
+    public DiscordUser? User => Member.User;
 
-    public Snowflake? GuildId => Member.GuildId;
+    public Snowflake? ThreadId => Thread?.Id ?? Member.ThreadId;
+
+    public Snowflake? GuildId => Guild?.Id ?? Member.GuildId;
 }
 
-public sealed record ThreadMembersUpdatedEvent(Snowflake ThreadId, Snowflake GuildId, int MemberCount,
-    IReadOnlyList<DiscordThreadMember> Added, IReadOnlyList<Snowflake> Removed) : DiscordEvent
+public sealed record ThreadMembersUpdatedEvent(DiscordChannel Thread, DiscordGuild Guild, int MemberCount,
+    IReadOnlyList<DiscordThreadMember> Added, IReadOnlyList<DiscordUser> Removed) : DiscordEvent
 {
+    public Snowflake ThreadId => Thread.Id;
+
+    public Snowflake GuildId => Guild.Id;
+
     public bool HasJoins => Added.Count > 0;
 
     public bool HasLeaves => Removed.Count > 0;
 }
 
-public sealed record ChannelPinsUpdatedEvent(Snowflake ChannelId, Snowflake? GuildId, DateTimeOffset? LastPinAt)
+public sealed record ChannelPinsUpdatedEvent(DiscordChannel Channel, DiscordGuild? Guild, DateTimeOffset? LastPinAt)
     : DiscordEvent
 {
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
+
     public bool IsEmpty => LastPinAt is null;
 }
 
-public sealed record InviteCreatedEvent(DiscordInvite Invite) : DiscordEvent
+public sealed record InviteCreatedEvent(DiscordInvite Invite, DiscordChannel Channel, DiscordGuild? Guild)
+    : DiscordEvent
 {
     public string Code => Invite.Code;
 
-    public Snowflake? GuildId => Invite.GuildId;
+    public string Url => Invite.Url;
 
-    public Snowflake? ChannelId => Invite.ChannelId;
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
 
     public DiscordUser? Inviter => Invite.Inviter;
 }
 
-public sealed record InviteDeletedEvent(string Code, Snowflake ChannelId, Snowflake? GuildId) : DiscordEvent
+public sealed record InviteDeletedEvent(DiscordInvite Invite, DiscordChannel Channel, DiscordGuild? Guild)
+    : DiscordEvent
 {
-    public string Url => $"https://discord.gg/{Code}";
+    public string Code => Invite.Code;
+
+    public string Url => Invite.Url;
+
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
 }
 
 public sealed record UserUpdatedEvent(DiscordUser User) : DiscordEvent
 {
+    public DiscordUser? Previous { get; init; }
+
     public Snowflake UserId => User.Id;
 }
 
-public sealed record GuildEmojisUpdatedEvent(Snowflake GuildId, IReadOnlyList<DiscordGuildEmoji> Emojis)
+public sealed record GuildEmojisUpdatedEvent(DiscordGuild Guild, IReadOnlyList<DiscordGuildEmoji> Emojis)
     : DiscordEvent
 {
+    public Snowflake GuildId => Guild.Id;
+
     public int Count => Emojis.Count;
 }
 
-public sealed record GuildStickersUpdatedEvent(Snowflake GuildId, IReadOnlyList<DiscordSticker> Stickers)
+public sealed record GuildStickersUpdatedEvent(DiscordGuild Guild, IReadOnlyList<DiscordSticker> Stickers)
     : DiscordEvent
 {
+    public Snowflake GuildId => Guild.Id;
+
     public int Count => Stickers.Count;
 }
 
-public sealed record AuditLogEntryCreatedEvent(DiscordAuditLogEntry Entry) : DiscordEvent
+public sealed record AuditLogEntryCreatedEvent(DiscordAuditLogEntry Entry, DiscordGuild? Guild, DiscordUser? User)
+    : DiscordEvent
 {
-    public Snowflake? GuildId => Entry.GuildId;
+    public Snowflake? GuildId => Guild?.Id ?? Entry.GuildId;
 
     public AuditLogAction Action => Entry.Action;
 
-    public Snowflake? UserId => Entry.UserId;
+    public Snowflake? UserId => User?.Id ?? Entry.UserId;
 
     public Snowflake? TargetId => Entry.TargetId;
 
     public string? Reason => Entry.Reason;
 }
 
-public sealed record PollVoteAddedEvent(Snowflake UserId, Snowflake ChannelId, Snowflake MessageId,
-    Snowflake? GuildId, int AnswerId) : DiscordEvent;
-
-public sealed record PollVoteRemovedEvent(Snowflake UserId, Snowflake ChannelId, Snowflake MessageId,
-    Snowflake? GuildId, int AnswerId) : DiscordEvent;
-
-public sealed record AutoModerationRuleCreatedEvent(DiscordAutoModerationRule Rule) : DiscordEvent
+public sealed record PollVoteAddedEvent(DiscordUser User, DiscordChannel Channel, DiscordMessage Message,
+    DiscordGuild? Guild, int AnswerId) : DiscordEvent
 {
-    public Snowflake? GuildId => Rule.GuildId;
+    public Snowflake UserId => User.Id;
+
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake MessageId => Message.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
 }
 
-public sealed record AutoModerationRuleUpdatedEvent(DiscordAutoModerationRule Rule) : DiscordEvent
+public sealed record PollVoteRemovedEvent(DiscordUser User, DiscordChannel Channel, DiscordMessage Message,
+    DiscordGuild? Guild, int AnswerId) : DiscordEvent
 {
-    public Snowflake? GuildId => Rule.GuildId;
+    public Snowflake UserId => User.Id;
+
+    public Snowflake ChannelId => Channel.Id;
+
+    public Snowflake MessageId => Message.Id;
+
+    public Snowflake? GuildId => Guild?.Id;
 }
 
-public sealed record AutoModerationRuleDeletedEvent(DiscordAutoModerationRule Rule) : DiscordEvent
+public sealed record AutoModerationRuleCreatedEvent(DiscordAutoModerationRule Rule, DiscordGuild? Guild)
+    : DiscordEvent
 {
-    public Snowflake? GuildId => Rule.GuildId;
+    public Snowflake? GuildId => Guild?.Id ?? Rule.GuildId;
+
+    public Snowflake RuleId => Rule.Id;
 }
 
-public sealed record AutoModerationActionExecutedEvent(Snowflake GuildId, Snowflake RuleId,
-    AutoModerationAction Action, Snowflake UserId) : DiscordEvent
+public sealed record AutoModerationRuleUpdatedEvent(DiscordAutoModerationRule Rule, DiscordGuild? Guild)
+    : DiscordEvent
+{
+    public Snowflake? GuildId => Guild?.Id ?? Rule.GuildId;
+
+    public Snowflake RuleId => Rule.Id;
+}
+
+public sealed record AutoModerationRuleDeletedEvent(DiscordAutoModerationRule Rule, DiscordGuild? Guild)
+    : DiscordEvent
+{
+    public Snowflake? GuildId => Guild?.Id ?? Rule.GuildId;
+
+    public Snowflake RuleId => Rule.Id;
+}
+
+public sealed record AutoModerationActionExecutedEvent(DiscordGuild Guild, DiscordAutoModerationRule Rule,
+    AutoModerationAction Action, DiscordUser User) : DiscordEvent
 {
     public AutoModerationTriggerType TriggerType { get; init; }
 
-    public Snowflake? ChannelId { get; init; }
+    public DiscordChannel? Channel { get; init; }
 
-    public Snowflake? MessageId { get; init; }
+    public DiscordMessage? Message { get; init; }
 
-    public Snowflake? AlertMessageId { get; init; }
+    public DiscordMessage? AlertMessage { get; init; }
+
+    public DiscordMember? Member { get; init; }
 
     public string? Content { get; init; }
 
@@ -344,98 +613,162 @@ public sealed record AutoModerationActionExecutedEvent(Snowflake GuildId, Snowfl
 
     public string? MatchedContent { get; init; }
 
+    public Snowflake GuildId => Guild.Id;
+
+    public Snowflake RuleId => Rule.Id;
+
+    public Snowflake UserId => User.Id;
+
+    public Snowflake? ChannelId => Channel?.Id;
+
+    public Snowflake? MessageId => Message?.Id;
+
+    public Snowflake? AlertMessageId => AlertMessage?.Id;
+
     public bool WasBlocked => Action.Type is AutoModerationActionType.BlockMessage;
 
     public bool WasTimedOut => Action.Type is AutoModerationActionType.Timeout;
 }
 
-public sealed record ScheduledEventCreatedEvent(DiscordScheduledEvent ScheduledEvent) : DiscordEvent
+public sealed record ScheduledEventCreatedEvent(DiscordScheduledEvent ScheduledEvent, DiscordGuild? Guild,
+    DiscordChannel? Channel) : DiscordEvent
 {
-    public Snowflake? GuildId => ScheduledEvent.GuildId;
+    public Snowflake? GuildId => Guild?.Id ?? ScheduledEvent.GuildId;
+
+    public Snowflake? ChannelId => Channel?.Id ?? ScheduledEvent.ChannelId;
 }
 
-public sealed record ScheduledEventUpdatedEvent(DiscordScheduledEvent ScheduledEvent) : DiscordEvent
+public sealed record ScheduledEventUpdatedEvent(DiscordScheduledEvent ScheduledEvent, DiscordGuild? Guild,
+    DiscordChannel? Channel) : DiscordEvent
 {
-    public Snowflake? GuildId => ScheduledEvent.GuildId;
+    public Snowflake? GuildId => Guild?.Id ?? ScheduledEvent.GuildId;
+
+    public Snowflake? ChannelId => Channel?.Id ?? ScheduledEvent.ChannelId;
 
     public ScheduledEventStatus Status => ScheduledEvent.Status;
 }
 
-public sealed record ScheduledEventDeletedEvent(DiscordScheduledEvent ScheduledEvent) : DiscordEvent
+public sealed record ScheduledEventDeletedEvent(DiscordScheduledEvent ScheduledEvent, DiscordGuild? Guild,
+    DiscordChannel? Channel) : DiscordEvent
 {
-    public Snowflake? GuildId => ScheduledEvent.GuildId;
+    public Snowflake? GuildId => Guild?.Id ?? ScheduledEvent.GuildId;
+
+    public Snowflake? ChannelId => Channel?.Id ?? ScheduledEvent.ChannelId;
 }
 
-public sealed record ScheduledEventUserAddedEvent(Snowflake ScheduledEventId, Snowflake UserId, Snowflake GuildId)
-    : DiscordEvent;
-
-public sealed record ScheduledEventUserRemovedEvent(Snowflake ScheduledEventId, Snowflake UserId, Snowflake GuildId)
-    : DiscordEvent;
-
-public sealed record StageInstanceCreatedEvent(DiscordStageInstance Instance) : DiscordEvent
+public sealed record ScheduledEventUserAddedEvent(DiscordScheduledEvent ScheduledEvent, DiscordUser User,
+    DiscordGuild Guild) : DiscordEvent
 {
-    public Snowflake? GuildId => Instance.GuildId;
+    public DiscordMember? Member { get; init; }
 
-    public Snowflake ChannelId => Instance.ChannelId;
+    public Snowflake ScheduledEventId => ScheduledEvent.Id;
+
+    public Snowflake UserId => User.Id;
+
+    public Snowflake GuildId => Guild.Id;
 }
 
-public sealed record StageInstanceUpdatedEvent(DiscordStageInstance Instance) : DiscordEvent
+public sealed record ScheduledEventUserRemovedEvent(DiscordScheduledEvent ScheduledEvent, DiscordUser User,
+    DiscordGuild Guild) : DiscordEvent
 {
-    public Snowflake? GuildId => Instance.GuildId;
+    public DiscordMember? Member { get; init; }
 
-    public Snowflake ChannelId => Instance.ChannelId;
+    public Snowflake ScheduledEventId => ScheduledEvent.Id;
+
+    public Snowflake UserId => User.Id;
+
+    public Snowflake GuildId => Guild.Id;
 }
 
-public sealed record StageInstanceDeletedEvent(DiscordStageInstance Instance) : DiscordEvent
+public sealed record StageInstanceCreatedEvent(DiscordStageInstance Instance, DiscordChannel Channel,
+    DiscordGuild? Guild) : DiscordEvent
 {
-    public Snowflake? GuildId => Instance.GuildId;
+    public Snowflake? GuildId => Guild?.Id ?? Instance.GuildId;
 
-    public Snowflake ChannelId => Instance.ChannelId;
+    public Snowflake ChannelId => Channel.Id;
 }
 
-public sealed record IntegrationCreatedEvent(DiscordIntegration Integration) : DiscordEvent
+public sealed record StageInstanceUpdatedEvent(DiscordStageInstance Instance, DiscordChannel Channel,
+    DiscordGuild? Guild) : DiscordEvent
 {
-    public Snowflake? GuildId => Integration.GuildId;
+    public Snowflake? GuildId => Guild?.Id ?? Instance.GuildId;
+
+    public Snowflake ChannelId => Channel.Id;
 }
 
-public sealed record IntegrationUpdatedEvent(DiscordIntegration Integration) : DiscordEvent
+public sealed record StageInstanceDeletedEvent(DiscordStageInstance Instance, DiscordChannel Channel,
+    DiscordGuild? Guild) : DiscordEvent
 {
-    public Snowflake? GuildId => Integration.GuildId;
+    public Snowflake? GuildId => Guild?.Id ?? Instance.GuildId;
+
+    public Snowflake ChannelId => Channel.Id;
 }
 
-public sealed record IntegrationDeletedEvent(Snowflake IntegrationId, Snowflake GuildId, Snowflake? ApplicationId)
-    : DiscordEvent;
-
-public sealed record GuildIntegrationsUpdatedEvent(Snowflake GuildId) : DiscordEvent;
-
-public sealed record EntitlementCreatedEvent(DiscordEntitlement Entitlement) : DiscordEvent
+public sealed record IntegrationCreatedEvent(DiscordIntegration Integration, DiscordGuild? Guild) : DiscordEvent
 {
-    public Snowflake? UserId => Entitlement.UserId;
+    public Snowflake? GuildId => Guild?.Id ?? Integration.GuildId;
+
+    public Snowflake IntegrationId => Integration.Id;
+}
+
+public sealed record IntegrationUpdatedEvent(DiscordIntegration Integration, DiscordGuild? Guild) : DiscordEvent
+{
+    public Snowflake? GuildId => Guild?.Id ?? Integration.GuildId;
+
+    public Snowflake IntegrationId => Integration.Id;
+}
+
+public sealed record IntegrationDeletedEvent(DiscordIntegration Integration, DiscordGuild Guild,
+    Snowflake? ApplicationId) : DiscordEvent
+{
+    public Snowflake IntegrationId => Integration.Id;
+
+    public Snowflake GuildId => Guild.Id;
+}
+
+public sealed record GuildIntegrationsUpdatedEvent(DiscordGuild Guild) : DiscordEvent
+{
+    public Snowflake GuildId => Guild.Id;
+}
+
+public sealed record EntitlementCreatedEvent(DiscordEntitlement Entitlement, DiscordUser? User, DiscordGuild? Guild)
+    : DiscordEvent
+{
+    public Snowflake? UserId => User?.Id ?? Entitlement.UserId;
+
+    public Snowflake? GuildId => Guild?.Id ?? Entitlement.GuildId;
 
     public Snowflake SkuId => Entitlement.SkuId;
 }
 
-public sealed record EntitlementUpdatedEvent(DiscordEntitlement Entitlement) : DiscordEvent
+public sealed record EntitlementUpdatedEvent(DiscordEntitlement Entitlement, DiscordUser? User, DiscordGuild? Guild)
+    : DiscordEvent
 {
-    public Snowflake? UserId => Entitlement.UserId;
+    public Snowflake? UserId => User?.Id ?? Entitlement.UserId;
+
+    public Snowflake? GuildId => Guild?.Id ?? Entitlement.GuildId;
 
     public Snowflake SkuId => Entitlement.SkuId;
 
     public bool IsRenewal => !Entitlement.Deleted;
 }
 
-public sealed record EntitlementDeletedEvent(DiscordEntitlement Entitlement) : DiscordEvent
+public sealed record EntitlementDeletedEvent(DiscordEntitlement Entitlement, DiscordUser? User, DiscordGuild? Guild)
+    : DiscordEvent
 {
-    public Snowflake? UserId => Entitlement.UserId;
+    public Snowflake? UserId => User?.Id ?? Entitlement.UserId;
+
+    public Snowflake? GuildId => Guild?.Id ?? Entitlement.GuildId;
 
     public Snowflake SkuId => Entitlement.SkuId;
 }
 
-public sealed record CommandPermissionsUpdatedEvent(DiscordCommandPermissions Permissions) : DiscordEvent
+public sealed record CommandPermissionsUpdatedEvent(DiscordCommandPermissions Permissions, DiscordGuild? Guild)
+    : DiscordEvent
 {
     public Snowflake CommandId => Permissions.CommandId;
 
-    public Snowflake GuildId => Permissions.GuildId;
+    public Snowflake GuildId => Guild?.Id ?? Permissions.GuildId;
 
     public bool IsApplicationWide => Permissions.IsApplicationWide;
 }

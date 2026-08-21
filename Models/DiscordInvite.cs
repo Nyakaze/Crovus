@@ -13,6 +13,12 @@ public sealed record DiscordInvite
 {
     public required string Code { get; init; }
 
+    [JsonIgnore]
+    public bool IsPartial { get; init; }
+
+    public static DiscordInvite Partial(string code, Snowflake? channelId = null, Snowflake? guildId = null) =>
+        new() { Code = code, ChannelId = channelId, GuildId = guildId, IsPartial = true };
+
     public Snowflake? GuildId { get; init; }
 
     public Snowflake? ChannelId { get; init; }

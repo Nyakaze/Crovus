@@ -20,6 +20,12 @@ public sealed record DiscordMember
 
     public Snowflake? GuildId { get; init; }
 
+    [JsonIgnore]
+    public bool IsPartial { get; init; }
+
+    public static DiscordMember Partial(DiscordUser user, Snowflake? guildId = null) =>
+        new() { User = user, GuildId = guildId, IsPartial = true };
+
     public string? Nickname { get; init; }
 
     public string? Avatar { get; init; }

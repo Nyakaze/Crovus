@@ -59,10 +59,10 @@ public sealed class CachedDiscordGateway : IDiscordGateway
     {
         await foreach (var gatewayEvent in _inner.ReadEventsAsync(cancellationToken))
         {
+            yield return gatewayEvent;
+
             if (gatewayEvent is { IsDispatch: true, Name: { } name, Data: { } data })
                 await ApplyAsync(name, data, cancellationToken);
-
-            yield return gatewayEvent;
         }
     }
 

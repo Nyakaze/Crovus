@@ -16,6 +16,12 @@ public sealed record DiscordIntegration
 
     public Snowflake? GuildId { get; init; }
 
+    [JsonIgnore]
+    public bool IsPartial { get; init; }
+
+    public static DiscordIntegration Partial(Snowflake id, Snowflake? guildId = null) =>
+        new() { Id = id, GuildId = guildId, Name = string.Empty, IsPartial = true };
+
     public required string Name { get; init; }
 
     public string Type { get; init; } = string.Empty;

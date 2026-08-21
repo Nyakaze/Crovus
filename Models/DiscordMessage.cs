@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Crovus.Models;
 
 public sealed record DiscordMessage(Snowflake Id, Snowflake ChannelId, Snowflake? GuildId,
@@ -6,6 +8,17 @@ public sealed record DiscordMessage(Snowflake Id, Snowflake ChannelId, Snowflake
     IReadOnlyList<DiscordEmbed> Embeds,
     DiscordMessageReference? ReferencedMessage)
 {
+    [JsonIgnore]
+    public bool IsPartial { get; init; }
+
+    public static DiscordMessage Partial(Snowflake id, Snowflake channelId, Snowflake? guildId = null) =>
+        new(id, channelId, guildId, DiscordUser.Partial(default), string.Empty, false, [], [], null)
+        {
+            IsPartial = true
+        };
+
+    public DiscordMessage In(Snowflake guildId) => GuildId is null ? this with { GuildId = guildId } : this;
+
     public IReadOnlyList<DiscordComponent> Components { get; init; } = [];
 
     public bool HasComponents => Components.Count > 0;

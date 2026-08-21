@@ -11,6 +11,17 @@ public sealed record DiscordRole(Snowflake Id, Snowflake? GuildId, string Name, 
     DiscordRoleTags? Tags)
 {
     [JsonIgnore]
+    public bool IsPartial { get; init; }
+
+    public static DiscordRole Partial(Snowflake id, Snowflake? guildId = null) =>
+        new(id, guildId, string.Empty, 0, false, 0, DiscordPermissions.None, false, false, null, null, null)
+        {
+            IsPartial = true
+        };
+
+    public DiscordRole In(Snowflake guildId) => GuildId is null ? this with { GuildId = guildId } : this;
+
+    [JsonIgnore]
     public string Mention => $"<@&{Id.Value}>";
 
     [JsonIgnore]

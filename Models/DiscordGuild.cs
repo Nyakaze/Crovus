@@ -52,6 +52,12 @@ public sealed record DiscordGuild
 
     public required string Name { get; init; }
 
+    [JsonIgnore]
+    public bool IsPartial { get; init; }
+
+    public static DiscordGuild Partial(Snowflake id) =>
+        new() { Id = id, Name = string.Empty, IsPartial = true };
+
     public Snowflake OwnerId { get; init; }
 
     public string? Icon { get; init; }

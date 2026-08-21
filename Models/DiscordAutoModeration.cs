@@ -66,6 +66,12 @@ public sealed record DiscordAutoModerationRule
 
     public Snowflake? GuildId { get; init; }
 
+    [JsonIgnore]
+    public bool IsPartial { get; init; }
+
+    public static DiscordAutoModerationRule Partial(Snowflake id, Snowflake? guildId = null) =>
+        new() { Id = id, GuildId = guildId, Name = string.Empty, IsPartial = true };
+
     public required string Name { get; init; }
 
     public Snowflake? CreatorId { get; init; }

@@ -28,6 +28,12 @@ public sealed record DiscordScheduledEvent
 
     public Snowflake? GuildId { get; init; }
 
+    [JsonIgnore]
+    public bool IsPartial { get; init; }
+
+    public static DiscordScheduledEvent Partial(Snowflake id, Snowflake? guildId = null) =>
+        new() { Id = id, GuildId = guildId, Name = string.Empty, IsPartial = true };
+
     public Snowflake? ChannelId { get; init; }
 
     public Snowflake? CreatorId { get; init; }

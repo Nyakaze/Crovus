@@ -147,6 +147,10 @@ public sealed record EventHandlerFailed(string Event, string Handler, string Rea
 
 public sealed record EventDecodeFailed(string Event, string Reason) : TelemetryEvent;
 
+public sealed record EventEntitiesResolved(string Event, int Requested, int Resolved) : TelemetryEvent;
+
+public sealed record EventResolveFailed(string Event, string Reason) : TelemetryEvent;
+
 public sealed record PresencePublished(ulong UserId, string Status, int Handlers, TimeSpan Duration)
     : TelemetryEvent;
 

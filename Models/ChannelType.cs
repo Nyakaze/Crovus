@@ -2,6 +2,7 @@ namespace Crovus.Models;
 
 public enum ChannelType
 {
+    Unknown = -1,
     GuildText = 0,
     Dm = 1,
     GuildVoice = 2,

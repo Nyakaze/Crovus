@@ -12,6 +12,12 @@ public sealed record DiscordStageInstance
 {
     public required Snowflake Id { get; init; }
 
+    [JsonIgnore]
+    public bool IsPartial { get; init; }
+
+    public static DiscordStageInstance Partial(Snowflake id, Snowflake channelId, Snowflake? guildId = null) =>
+        new() { Id = id, ChannelId = channelId, GuildId = guildId, IsPartial = true };
+
     public Snowflake? GuildId { get; init; }
 
     public required Snowflake ChannelId { get; init; }

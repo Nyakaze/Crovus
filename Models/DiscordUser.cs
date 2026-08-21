@@ -1,9 +1,17 @@
+using System.Text.Json.Serialization;
+
 namespace Crovus.Models;
 
 public sealed record DiscordUser(Snowflake Id, string Username, string? GlobalName, string? Discriminator,
     string? Avatar, bool IsBot)
 {
-    public string DisplayName => GlobalName ?? Username;
+    [JsonIgnore]
+    public bool IsPartial { get; init; }
+
+    public static DiscordUser Partial(Snowflake id) =>
+        new(id, string.Empty, null, null, null, false) { IsPartial = true };
+
+    public string DisplayName => GlobalName ?? (Username.Length > 0 ? Username : Id.ToString());
 
     public string Mention => $"<@{Id.Value}>";
 

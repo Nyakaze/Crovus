@@ -20,6 +20,8 @@ public sealed record CrovusClientOptions
 
     public bool SequentialDispatch { get; init; }
 
+    public bool ResolveEntities { get; init; } = true;
+
     public LogLevel MinimumLogLevel { get; init; } = LogLevel.Information;
 
     public int? ShardId { get; init; }

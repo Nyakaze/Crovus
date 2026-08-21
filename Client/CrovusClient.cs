@@ -20,6 +20,7 @@ public sealed class CrovusClient : IAsyncDisposable
     private readonly ITelemetry _telemetry;
     private readonly ConcurrentDictionary<Task, byte> _pending = new();
     private readonly ConcurrentDictionary<Snowflake, DiscordVoiceState> _voiceStates = new();
+    private readonly DiscordEventResolver? _resolver;
 
     private long _dispatched;
     private long _startedAt;
@@ -63,6 +64,7 @@ public sealed class CrovusClient : IAsyncDisposable
         Events = new DiscordEventDispatcher(Diagnostics);
         Presences = new PresenceTracker(Diagnostics, options.PresenceCapacity);
         Services = new DiscordServices(Rest, Diagnostics);
+        _resolver = options.ResolveEntities ? new DiscordEventResolver(Cache, Diagnostics) : null;
     }
 
     public CrovusClient(string token, GatewayIntents intents)
@@ -91,6 +93,7 @@ public sealed class CrovusClient : IAsyncDisposable
         Events = new DiscordEventDispatcher(Diagnostics);
         Presences = new PresenceTracker(Diagnostics, options.PresenceCapacity);
         Services = new DiscordServices(Rest, Diagnostics);
+        _resolver = options.ResolveEntities ? new DiscordEventResolver(Cache, Diagnostics) : null;
     }
 
     public DiagnosticsHub Diagnostics { get; }
@@ -258,6 +261,9 @@ public sealed class CrovusClient : IAsyncDisposable
                     continue;
 
                 decoded = Capture(decoded);
+
+                if (_resolver is { } resolver)
+                    decoded = await resolver.ResolveAsync(decoded, cancellationToken);
 
                 Interlocked.Increment(ref _dispatched);
 
