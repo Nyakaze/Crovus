@@ -73,7 +73,7 @@ public sealed class DiscordEventResolver
             MessageCreatedEvent message => message with
             {
                 Channel = await ChannelAsync(message.Channel, token),
-                Guild = await GuildAsync(message.Guild, token),
+                Guild = await OptionalGuildAsync(message.Guild, token),
                 Member = message.Member ?? await MemberAsync(message.Guild?.Id, message.Author.Id, token)
             },
 
@@ -81,7 +81,7 @@ public sealed class DiscordEventResolver
             {
                 Message = await MessageAsync(message.Message, token),
                 Channel = await ChannelAsync(message.Channel, token),
-                Guild = await GuildAsync(message.Guild, token),
+                Guild = await OptionalGuildAsync(message.Guild, token),
                 Previous = message.Previous ?? await CachedMessageAsync(message.Message.Id, token)
             },
 
@@ -89,14 +89,14 @@ public sealed class DiscordEventResolver
             {
                 Message = await MessageAsync(message.Message, token),
                 Channel = await ChannelAsync(message.Channel, token),
-                Guild = await GuildAsync(message.Guild, token)
+                Guild = await OptionalGuildAsync(message.Guild, token)
             },
 
             MessagesBulkDeletedEvent bulk => bulk with
             {
                 Messages = await MessagesAsync(bulk.Messages, token),
                 Channel = await ChannelAsync(bulk.Channel, token),
-                Guild = await GuildAsync(bulk.Guild, token)
+                Guild = await OptionalGuildAsync(bulk.Guild, token)
             },
 
             ReactionAddedEvent reaction => reaction with
@@ -104,7 +104,7 @@ public sealed class DiscordEventResolver
                 Message = await MessageAsync(reaction.Message, token),
                 Channel = await ChannelAsync(reaction.Channel, token),
                 User = await UserAsync(reaction.User, token),
-                Guild = await GuildAsync(reaction.Guild, token),
+                Guild = await OptionalGuildAsync(reaction.Guild, token),
                 Member = reaction.Member ?? await MemberAsync(reaction.Guild?.Id, reaction.User.Id, token)
             },
 
@@ -113,7 +113,7 @@ public sealed class DiscordEventResolver
                 Message = await MessageAsync(reaction.Message, token),
                 Channel = await ChannelAsync(reaction.Channel, token),
                 User = await UserAsync(reaction.User, token),
-                Guild = await GuildAsync(reaction.Guild, token),
+                Guild = await OptionalGuildAsync(reaction.Guild, token),
                 Member = reaction.Member ?? await MemberAsync(reaction.Guild?.Id, reaction.User.Id, token)
             },
 
@@ -121,47 +121,47 @@ public sealed class DiscordEventResolver
             {
                 Message = await MessageAsync(reaction.Message, token),
                 Channel = await ChannelAsync(reaction.Channel, token),
-                Guild = await GuildAsync(reaction.Guild, token)
+                Guild = await OptionalGuildAsync(reaction.Guild, token)
             },
 
             ReactionEmojiClearedEvent reaction => reaction with
             {
                 Message = await MessageAsync(reaction.Message, token),
                 Channel = await ChannelAsync(reaction.Channel, token),
-                Guild = await GuildAsync(reaction.Guild, token)
+                Guild = await OptionalGuildAsync(reaction.Guild, token)
             },
 
-            ChannelCreatedEvent channel => channel with { Guild = await GuildAsync(channel.Guild, token) },
+            ChannelCreatedEvent channel => channel with { Guild = await OptionalGuildAsync(channel.Guild, token) },
 
             ChannelUpdatedEvent channel => channel with
             {
-                Guild = await GuildAsync(channel.Guild, token),
+                Guild = await OptionalGuildAsync(channel.Guild, token),
                 Previous = channel.Previous ?? await CachedChannelAsync(channel.Channel.Id, token)
             },
 
             ChannelDeletedEvent channel => channel with
             {
                 Channel = await ChannelAsync(channel.Channel, token),
-                Guild = await GuildAsync(channel.Guild, token)
+                Guild = await OptionalGuildAsync(channel.Guild, token)
             },
 
             ThreadCreatedEvent thread => thread with
             {
-                Parent = await ChannelAsync(thread.Parent, token),
-                Guild = await GuildAsync(thread.Guild, token)
+                Parent = await OptionalChannelAsync(thread.Parent, token),
+                Guild = await OptionalGuildAsync(thread.Guild, token)
             },
 
             ThreadUpdatedEvent thread => thread with
             {
-                Parent = await ChannelAsync(thread.Parent, token),
-                Guild = await GuildAsync(thread.Guild, token)
+                Parent = await OptionalChannelAsync(thread.Parent, token),
+                Guild = await OptionalGuildAsync(thread.Guild, token)
             },
 
             ThreadDeletedEvent thread => thread with
             {
                 Thread = await ChannelAsync(thread.Thread, token),
-                Parent = await ChannelAsync(thread.Parent, token),
-                Guild = await GuildAsync(thread.Guild, token)
+                Parent = await OptionalChannelAsync(thread.Parent, token),
+                Guild = await OptionalGuildAsync(thread.Guild, token)
             },
 
             GuildUnavailableEvent guild => guild with { Guild = await GuildAsync(guild.Guild, token) },
@@ -210,35 +210,35 @@ public sealed class DiscordEventResolver
             WebhooksUpdatedEvent webhooks => webhooks with
             {
                 Channel = await ChannelAsync(webhooks.Channel, token),
-                Guild = await GuildAsync(webhooks.Guild, token)
+                Guild = await OptionalGuildAsync(webhooks.Guild, token)
             },
 
             TypingStartedEvent typing => typing with
             {
                 Channel = await ChannelAsync(typing.Channel, token),
                 User = await UserAsync(typing.User, token),
-                Guild = await GuildAsync(typing.Guild, token),
+                Guild = await OptionalGuildAsync(typing.Guild, token),
                 Member = typing.Member ?? await MemberAsync(typing.Guild?.Id, typing.User.Id, token)
             },
 
             InteractionCreatedEvent interaction => interaction with
             {
-                Channel = await ChannelAsync(interaction.Channel, token),
-                Guild = await GuildAsync(interaction.Guild, token)
+                Channel = await OptionalChannelAsync(interaction.Channel, token),
+                Guild = await OptionalGuildAsync(interaction.Guild, token)
             },
 
             PresenceUpdatedEvent presence => presence with
             {
-                Guild = await GuildAsync(presence.Guild, token),
+                Guild = await OptionalGuildAsync(presence.Guild, token),
                 User = await UserAsync(presence.User, token)
             },
 
             VoiceStateUpdatedEvent voice => voice with
             {
                 User = await UserAsync(voice.User, token),
-                Guild = await GuildAsync(voice.Guild, token),
-                Channel = await ChannelAsync(voice.Channel, token),
-                PreviousChannel = await ChannelAsync(PartialChannel(voice.Previous), token)
+                Guild = await OptionalGuildAsync(voice.Guild, token),
+                Channel = await OptionalChannelAsync(voice.Channel, token),
+                PreviousChannel = await OptionalChannelAsync(PartialChannel(voice.Previous), token)
             },
 
             VoiceServerUpdatedEvent server => server with { Guild = await GuildAsync(server.Guild, token) },
@@ -257,8 +257,8 @@ public sealed class DiscordEventResolver
 
             ThreadMemberUpdatedEvent member => member with
             {
-                Thread = await ChannelAsync(member.Thread, token),
-                Guild = await GuildAsync(member.Guild, token)
+                Thread = await OptionalChannelAsync(member.Thread, token),
+                Guild = await OptionalGuildAsync(member.Guild, token)
             },
 
             ThreadMembersUpdatedEvent members => members with
@@ -271,19 +271,19 @@ public sealed class DiscordEventResolver
             ChannelPinsUpdatedEvent pins => pins with
             {
                 Channel = await ChannelAsync(pins.Channel, token),
-                Guild = await GuildAsync(pins.Guild, token)
+                Guild = await OptionalGuildAsync(pins.Guild, token)
             },
 
             InviteCreatedEvent invite => invite with
             {
                 Channel = await ChannelAsync(invite.Channel, token),
-                Guild = await GuildAsync(invite.Guild, token)
+                Guild = await OptionalGuildAsync(invite.Guild, token)
             },
 
             InviteDeletedEvent invite => invite with
             {
                 Channel = await ChannelAsync(invite.Channel, token),
-                Guild = await GuildAsync(invite.Guild, token)
+                Guild = await OptionalGuildAsync(invite.Guild, token)
             },
 
             UserUpdatedEvent user => user with
@@ -297,8 +297,8 @@ public sealed class DiscordEventResolver
 
             AuditLogEntryCreatedEvent audit => audit with
             {
-                Guild = await GuildAsync(audit.Guild, token),
-                User = await UserAsync(audit.User, token)
+                Guild = await OptionalGuildAsync(audit.Guild, token),
+                User = await OptionalUserAsync(audit.User, token)
             },
 
             PollVoteAddedEvent vote => vote with
@@ -306,7 +306,7 @@ public sealed class DiscordEventResolver
                 User = await UserAsync(vote.User, token),
                 Channel = await ChannelAsync(vote.Channel, token),
                 Message = await MessageAsync(vote.Message, token),
-                Guild = await GuildAsync(vote.Guild, token)
+                Guild = await OptionalGuildAsync(vote.Guild, token)
             },
 
             PollVoteRemovedEvent vote => vote with
@@ -314,41 +314,41 @@ public sealed class DiscordEventResolver
                 User = await UserAsync(vote.User, token),
                 Channel = await ChannelAsync(vote.Channel, token),
                 Message = await MessageAsync(vote.Message, token),
-                Guild = await GuildAsync(vote.Guild, token)
+                Guild = await OptionalGuildAsync(vote.Guild, token)
             },
 
-            AutoModerationRuleCreatedEvent rule => rule with { Guild = await GuildAsync(rule.Guild, token) },
+            AutoModerationRuleCreatedEvent rule => rule with { Guild = await OptionalGuildAsync(rule.Guild, token) },
 
-            AutoModerationRuleUpdatedEvent rule => rule with { Guild = await GuildAsync(rule.Guild, token) },
+            AutoModerationRuleUpdatedEvent rule => rule with { Guild = await OptionalGuildAsync(rule.Guild, token) },
 
-            AutoModerationRuleDeletedEvent rule => rule with { Guild = await GuildAsync(rule.Guild, token) },
+            AutoModerationRuleDeletedEvent rule => rule with { Guild = await OptionalGuildAsync(rule.Guild, token) },
 
             AutoModerationActionExecutedEvent execution => execution with
             {
                 Guild = await GuildAsync(execution.Guild, token),
                 User = await UserAsync(execution.User, token),
-                Channel = await ChannelAsync(execution.Channel, token),
-                Message = await MessageAsync(execution.Message, token),
-                AlertMessage = await MessageAsync(execution.AlertMessage, token),
+                Channel = await OptionalChannelAsync(execution.Channel, token),
+                Message = await OptionalMessageAsync(execution.Message, token),
+                AlertMessage = await OptionalMessageAsync(execution.AlertMessage, token),
                 Member = execution.Member ?? await MemberAsync(execution.Guild.Id, execution.User.Id, token)
             },
 
             ScheduledEventCreatedEvent scheduled => scheduled with
             {
-                Guild = await GuildAsync(scheduled.Guild, token),
-                Channel = await ChannelAsync(scheduled.Channel, token)
+                Guild = await OptionalGuildAsync(scheduled.Guild, token),
+                Channel = await OptionalChannelAsync(scheduled.Channel, token)
             },
 
             ScheduledEventUpdatedEvent scheduled => scheduled with
             {
-                Guild = await GuildAsync(scheduled.Guild, token),
-                Channel = await ChannelAsync(scheduled.Channel, token)
+                Guild = await OptionalGuildAsync(scheduled.Guild, token),
+                Channel = await OptionalChannelAsync(scheduled.Channel, token)
             },
 
             ScheduledEventDeletedEvent scheduled => scheduled with
             {
-                Guild = await GuildAsync(scheduled.Guild, token),
-                Channel = await ChannelAsync(scheduled.Channel, token)
+                Guild = await OptionalGuildAsync(scheduled.Guild, token),
+                Channel = await OptionalChannelAsync(scheduled.Channel, token)
             },
 
             ScheduledEventUserAddedEvent scheduled => scheduled with
@@ -368,29 +368,29 @@ public sealed class DiscordEventResolver
             StageInstanceCreatedEvent stage => stage with
             {
                 Channel = await ChannelAsync(stage.Channel, token),
-                Guild = await GuildAsync(stage.Guild, token)
+                Guild = await OptionalGuildAsync(stage.Guild, token)
             },
 
             StageInstanceUpdatedEvent stage => stage with
             {
                 Channel = await ChannelAsync(stage.Channel, token),
-                Guild = await GuildAsync(stage.Guild, token)
+                Guild = await OptionalGuildAsync(stage.Guild, token)
             },
 
             StageInstanceDeletedEvent stage => stage with
             {
                 Channel = await ChannelAsync(stage.Channel, token),
-                Guild = await GuildAsync(stage.Guild, token)
+                Guild = await OptionalGuildAsync(stage.Guild, token)
             },
 
             IntegrationCreatedEvent integration => integration with
             {
-                Guild = await GuildAsync(integration.Guild, token)
+                Guild = await OptionalGuildAsync(integration.Guild, token)
             },
 
             IntegrationUpdatedEvent integration => integration with
             {
-                Guild = await GuildAsync(integration.Guild, token)
+                Guild = await OptionalGuildAsync(integration.Guild, token)
             },
 
             IntegrationDeletedEvent integration => integration with
@@ -405,25 +405,25 @@ public sealed class DiscordEventResolver
 
             EntitlementCreatedEvent entitlement => entitlement with
             {
-                User = await UserAsync(entitlement.User, token),
-                Guild = await GuildAsync(entitlement.Guild, token)
+                User = await OptionalUserAsync(entitlement.User, token),
+                Guild = await OptionalGuildAsync(entitlement.Guild, token)
             },
 
             EntitlementUpdatedEvent entitlement => entitlement with
             {
-                User = await UserAsync(entitlement.User, token),
-                Guild = await GuildAsync(entitlement.Guild, token)
+                User = await OptionalUserAsync(entitlement.User, token),
+                Guild = await OptionalGuildAsync(entitlement.Guild, token)
             },
 
             EntitlementDeletedEvent entitlement => entitlement with
             {
-                User = await UserAsync(entitlement.User, token),
-                Guild = await GuildAsync(entitlement.Guild, token)
+                User = await OptionalUserAsync(entitlement.User, token),
+                Guild = await OptionalGuildAsync(entitlement.Guild, token)
             },
 
             CommandPermissionsUpdatedEvent permissions => permissions with
             {
-                Guild = await GuildAsync(permissions.Guild, token)
+                Guild = await OptionalGuildAsync(permissions.Guild, token)
             },
 
             _ => discordEvent
@@ -432,9 +432,9 @@ public sealed class DiscordEventResolver
     private static DiscordChannel? PartialChannel(DiscordVoiceState? state) =>
         state?.ChannelId is { } channelId ? DiscordChannel.Partial(channelId, state.GuildId) : null;
 
-    private async ValueTask<DiscordGuild?> GuildAsync(DiscordGuild? guild, CancellationToken token)
+    private async ValueTask<DiscordGuild> GuildAsync(DiscordGuild guild, CancellationToken token)
     {
-        if (guild is not { IsPartial: true })
+        if (!guild.IsPartial)
             return guild;
 
         Interlocked.Increment(ref _requested);
@@ -447,9 +447,9 @@ public sealed class DiscordEventResolver
         return cached;
     }
 
-    private async ValueTask<DiscordChannel?> ChannelAsync(DiscordChannel? channel, CancellationToken token)
+    private async ValueTask<DiscordChannel> ChannelAsync(DiscordChannel channel, CancellationToken token)
     {
-        if (channel is not { IsPartial: true })
+        if (!channel.IsPartial)
             return channel;
 
         Interlocked.Increment(ref _requested);
@@ -462,9 +462,9 @@ public sealed class DiscordEventResolver
         return channel.GuildId is { } guildId ? cached.In(guildId) : cached;
     }
 
-    private async ValueTask<DiscordMessage?> MessageAsync(DiscordMessage? message, CancellationToken token)
+    private async ValueTask<DiscordMessage> MessageAsync(DiscordMessage message, CancellationToken token)
     {
-        if (message is not { IsPartial: true })
+        if (!message.IsPartial)
             return message;
 
         Interlocked.Increment(ref _requested);
@@ -477,9 +477,9 @@ public sealed class DiscordEventResolver
         return message.GuildId is { } guildId ? cached.In(guildId) : cached;
     }
 
-    private async ValueTask<DiscordUser?> UserAsync(DiscordUser? user, CancellationToken token)
+    private async ValueTask<DiscordUser> UserAsync(DiscordUser user, CancellationToken token)
     {
-        if (user is not { IsPartial: true })
+        if (!user.IsPartial)
             return user;
 
         Interlocked.Increment(ref _requested);
@@ -491,6 +491,18 @@ public sealed class DiscordEventResolver
 
         return cached;
     }
+
+    private async ValueTask<DiscordGuild?> OptionalGuildAsync(DiscordGuild? guild, CancellationToken token) =>
+        guild is null ? null : await GuildAsync(guild, token);
+
+    private async ValueTask<DiscordChannel?> OptionalChannelAsync(DiscordChannel? channel, CancellationToken token) =>
+        channel is null ? null : await ChannelAsync(channel, token);
+
+    private async ValueTask<DiscordMessage?> OptionalMessageAsync(DiscordMessage? message, CancellationToken token) =>
+        message is null ? null : await MessageAsync(message, token);
+
+    private async ValueTask<DiscordUser?> OptionalUserAsync(DiscordUser? user, CancellationToken token) =>
+        user is null ? null : await UserAsync(user, token);
 
     private async ValueTask<DiscordRole> RoleAsync(Snowflake guildId, DiscordRole role, CancellationToken token)
     {
@@ -532,7 +544,7 @@ public sealed class DiscordEventResolver
         var resolved = new DiscordMessage[messages.Count];
 
         for (var index = 0; index < messages.Count; index++)
-            resolved[index] = await MessageAsync(messages[index], token) ?? messages[index];
+            resolved[index] = await MessageAsync(messages[index], token);
 
         return resolved;
     }
@@ -546,7 +558,7 @@ public sealed class DiscordEventResolver
         var resolved = new DiscordChannel[channels.Count];
 
         for (var index = 0; index < channels.Count; index++)
-            resolved[index] = await ChannelAsync(channels[index], token) ?? channels[index];
+            resolved[index] = await ChannelAsync(channels[index], token);
 
         return resolved;
     }
@@ -560,7 +572,7 @@ public sealed class DiscordEventResolver
         var resolved = new DiscordUser[users.Count];
 
         for (var index = 0; index < users.Count; index++)
-            resolved[index] = await UserAsync(users[index], token) ?? users[index];
+            resolved[index] = await UserAsync(users[index], token);
 
         return resolved;
     }

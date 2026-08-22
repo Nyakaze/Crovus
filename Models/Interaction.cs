@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -118,7 +119,7 @@ public sealed record DiscordInteractionData
     public Snowflake? TargetId { get; init; }
 }
 
-public sealed record DiscordInteraction
+public sealed record DiscordInteraction : IBoundEntity
 {
     public static readonly TimeSpan InitialResponseWindow = TimeSpan.FromSeconds(3);
 
@@ -275,4 +276,23 @@ public sealed record DiscordInteraction
     public bool Triggered(string customId) => string.Equals(CustomId, customId, StringComparison.Ordinal);
 
     public bool TriggeredBy(string prefix) => CustomId.StartsWith(prefix, StringComparison.Ordinal);
+
+    private EntityBinding _binding;
+
+    public DiscordInteraction Bind(ICrovusContext context)
+    {
+        var bound = this with {
+            Member = Member?.Bind(context),
+            User = User?.Bind(context),
+            Message = Message?.Bind(context)
+        };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -8,7 +9,7 @@ public sealed record DiscordRoleTags(Snowflake? BotId, Snowflake? IntegrationId,
 
 public sealed record DiscordRole(Snowflake Id, Snowflake? GuildId, string Name, int Color, bool Hoist, int Position,
     DiscordPermissions Permissions, bool Managed, bool Mentionable, string? Icon, string? UnicodeEmoji,
-    DiscordRoleTags? Tags)
+    DiscordRoleTags? Tags) : IBoundEntity
 {
     [JsonIgnore]
     public bool IsPartial { get; init; }
@@ -58,4 +59,19 @@ public sealed record DiscordRole(Snowflake Id, Snowflake? GuildId, string Name, 
     }
 
     public override string ToString() => $"{Name} ({Id.Value.ToString(CultureInfo.InvariantCulture)})";
+
+    private EntityBinding _binding;
+
+    public DiscordRole Bind(ICrovusContext context)
+    {
+        var bound = this with { };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -16,7 +17,7 @@ public enum StickerFormatType
     Gif = 4
 }
 
-public sealed record DiscordSticker
+public sealed record DiscordSticker : IBoundEntity
 {
     public required Snowflake Id { get; init; }
 
@@ -51,4 +52,19 @@ public sealed record DiscordSticker
     public DiscordSticker In(Snowflake guildId) => GuildId is null ? this with { GuildId = guildId } : this;
 
     public override string ToString() => Name;
+
+    private EntityBinding _binding;
+
+    public DiscordSticker Bind(ICrovusContext context)
+    {
+        var bound = this with { Author = Author?.Bind(context) };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

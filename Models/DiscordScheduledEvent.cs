@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -22,7 +23,7 @@ public enum ScheduledEventPrivacyLevel
     GuildOnly = 2
 }
 
-public sealed record DiscordScheduledEvent
+public sealed record DiscordScheduledEvent : IBoundEntity
 {
     public required Snowflake Id { get; init; }
 
@@ -85,4 +86,19 @@ public sealed record DiscordScheduledEvent
     public DiscordScheduledEvent In(Snowflake guildId) => GuildId is null ? this with { GuildId = guildId } : this;
 
     public override string ToString() => Name;
+
+    private EntityBinding _binding;
+
+    public DiscordScheduledEvent Bind(ICrovusContext context)
+    {
+        var bound = this with { Creator = Creator?.Bind(context) };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

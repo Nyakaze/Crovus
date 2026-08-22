@@ -1,8 +1,9 @@
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
-public sealed record DiscordVoiceState
+public sealed record DiscordVoiceState : IBoundEntity
 {
     public Snowflake? GuildId { get; init; }
 
@@ -49,4 +50,19 @@ public sealed record DiscordVoiceState
 
     public override string ToString() =>
         ChannelId is { } channelId ? $"{UserId} in {channelId}" : $"{UserId} disconnected";
+
+    private EntityBinding _binding;
+
+    public DiscordVoiceState Bind(ICrovusContext context)
+    {
+        var bound = this with { Member = Member?.Bind(context) };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

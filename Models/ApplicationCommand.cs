@@ -1,5 +1,6 @@
-using System.Text.Json.Serialization;
 using System.Globalization;
+using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -83,13 +84,28 @@ public sealed record DiscordApplicationCommandOption(ApplicationCommandOptionTyp
 public sealed record DiscordApplicationCommand(Snowflake Id, ApplicationCommandType Type, Snowflake ApplicationId,
     Snowflake? GuildId, string Name, string Description, IReadOnlyList<DiscordApplicationCommandOption>? Options,
     DiscordPermissions? DefaultMemberPermissions, bool Nsfw, string Version,
-    IReadOnlyList<ApplicationIntegrationType>? IntegrationTypes, IReadOnlyList<InteractionContextType>? Contexts)
+    IReadOnlyList<ApplicationIntegrationType>? IntegrationTypes, IReadOnlyList<InteractionContextType>? Contexts) : IBoundEntity
 {
     [JsonIgnore]
     public bool IsGlobal => GuildId is null;
 
     [JsonIgnore]
     public string Mention => $"</{Name}:{Id.Value}>";
+
+    private EntityBinding _binding;
+
+    public DiscordApplicationCommand Bind(ICrovusContext context)
+    {
+        var bound = this with { };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }
 
 public sealed record ApplicationCommandRequest(string Name, ApplicationCommandType Type)

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -14,7 +15,7 @@ public enum EntitlementType
     ApplicationSubscription = 8
 }
 
-public sealed record DiscordEntitlement
+public sealed record DiscordEntitlement : IBoundEntity
 {
     public required Snowflake Id { get; init; }
 
@@ -48,4 +49,19 @@ public sealed record DiscordEntitlement
                             (EndsAt is not { } end || end > DateTimeOffset.UtcNow);
 
     public override string ToString() => $"{Type} {SkuId}";
+
+    private EntityBinding _binding;
+
+    public DiscordEntitlement Bind(ICrovusContext context)
+    {
+        var bound = this with { };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

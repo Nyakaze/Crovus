@@ -1,3 +1,5 @@
+using Crovus.Client;
+
 namespace Crovus.Models;
 
 public sealed record MemberModifyRequest
@@ -187,7 +189,7 @@ public sealed record AuditLogQuery
         new() { Action = action, Limit = limit };
 }
 
-public sealed record DiscordAuditLog
+public sealed record DiscordAuditLog : IBoundEntity
 {
     public IReadOnlyList<DiscordAuditLogEntry> Entries { get; init; } = [];
 
@@ -207,4 +209,27 @@ public sealed record DiscordAuditLog
 
     public DiscordUser? UserOf(DiscordAuditLogEntry entry) =>
         entry.UserId is { } userId ? Users.FirstOrDefault(user => user.Id == userId) : null;
+
+    private EntityBinding _binding;
+
+    public DiscordAuditLog Bind(ICrovusContext context)
+    {
+        var bound = this with {
+            Entries = EntityBinder.BindAll(Entries, context),
+            Users = EntityBinder.BindAll(Users, context),
+            Webhooks = EntityBinder.BindAll(Webhooks, context),
+            ScheduledEvents = EntityBinder.BindAll(ScheduledEvents, context),
+            AutoModerationRules = EntityBinder.BindAll(AutoModerationRules, context),
+            Integrations = EntityBinder.BindAll(Integrations, context),
+            Threads = EntityBinder.BindAll(Threads, context)
+        };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

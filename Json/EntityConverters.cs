@@ -453,9 +453,10 @@ public sealed class DiscordMemberConverter : JsonConverter<DiscordMember>
     public override void Write(Utf8JsonWriter writer, DiscordMember value, JsonSerializerOptions options) =>
         throw new NotSupportedException("Discord members are read-only.");
 
-    internal static DiscordMember Read(JsonElement element, JsonSerializerOptions options) => new()
+    internal static DiscordMember Read(JsonElement element, JsonSerializerOptions options,
+        DiscordUser? fallbackUser = null) => new()
     {
-        User = element.Deserialize<DiscordUser>("user", options) ??
+        User = element.Deserialize<DiscordUser>("user", options) ?? fallbackUser ??
                throw new JsonException("Expected a guild member to carry a user."),
         GuildId = element.SnowflakeOrNull("guild_id"),
         Nickname = element.StringOrNull("nick"),

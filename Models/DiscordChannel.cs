@@ -1,10 +1,11 @@
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
 public sealed record DiscordChannel(Snowflake Id, Snowflake? GuildId, ChannelType Type, string Name,
     Snowflake? ParentId, bool IsThread
-    )
+    ) : IBoundEntity
 {
     [JsonIgnore]
     public bool IsPartial { get; init; }
@@ -27,4 +28,19 @@ public sealed record DiscordChannel(Snowflake Id, Snowflake? GuildId, ChannelTyp
     public bool SupportsWebhooks => GuildId is not null && (IsThread || Type is
         ChannelType.GuildText or ChannelType.GuildVoice or ChannelType.GuildAnnouncement
         or ChannelType.GuildForum or ChannelType.GuildMedia or ChannelType.GuildStageVoice);
+
+    private EntityBinding _binding;
+
+    public DiscordChannel Bind(ICrovusContext context)
+    {
+        var bound = this with { };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

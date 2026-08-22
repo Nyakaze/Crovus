@@ -1,5 +1,6 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -88,7 +89,7 @@ public sealed record DiscordAuditLogChange(string Key, JsonElement? OldValue, Js
     public override string ToString() => $"{Key}: {OldValue} -> {NewValue}";
 }
 
-public sealed record DiscordAuditLogEntry
+public sealed record DiscordAuditLogEntry : IBoundEntity
 {
     public required Snowflake Id { get; init; }
 
@@ -134,4 +135,19 @@ public sealed record DiscordAuditLogEntry
         Changes.FirstOrDefault(change => string.Equals(change.Key, key, StringComparison.Ordinal));
 
     public override string ToString() => $"{Action} by {UserId}";
+
+    private EntityBinding _binding;
+
+    public DiscordAuditLogEntry Bind(ICrovusContext context)
+    {
+        var bound = this with { };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

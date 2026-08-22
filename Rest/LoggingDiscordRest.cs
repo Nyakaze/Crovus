@@ -1,11 +1,12 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Crovus.Client;
 using Crovus.Logs;
 using Crovus.Models;
 
 namespace Crovus.Rest;
 
-public sealed class LoggingDiscordRest : IDiscordRest
+public sealed class LoggingDiscordRest : IDiscordRest, IContextAware
 {
     private const string LogCategory = "Rest.Client";
 
@@ -23,6 +24,16 @@ public sealed class LoggingDiscordRest : IDiscordRest
     public LoggingDiscordRest(IDiscordRest inner, DiagnosticsHub diagnostics)
         : this(inner, diagnostics, diagnostics)
     {
+    }
+
+    public ICrovusContext? Context
+    {
+        get => (_inner as IContextAware)?.Context;
+        set
+        {
+            if (_inner is IContextAware aware)
+                aware.Context = value;
+        }
     }
 
     public async Task<DiscordChannel> GetChannelAsync(Snowflake channelId,

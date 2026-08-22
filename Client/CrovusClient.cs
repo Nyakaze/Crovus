@@ -11,7 +11,7 @@ using Crovus.Services;
 
 namespace Crovus.Client;
 
-public sealed class CrovusClient : IAsyncDisposable
+public sealed class CrovusClient : IAsyncDisposable, ICrovusContext
 {
     private const string LogCategory = "Client";
 
@@ -65,6 +65,12 @@ public sealed class CrovusClient : IAsyncDisposable
         Presences = new PresenceTracker(Diagnostics, options.PresenceCapacity);
         Services = new DiscordServices(Rest, Diagnostics);
         _resolver = options.ResolveEntities ? new DiscordEventResolver(Cache, Diagnostics) : null;
+
+        if (Rest is IContextAware boundRest)
+            boundRest.Context = this;
+
+        if (Cache is IContextAware boundCache)
+            boundCache.Context = this;
     }
 
     public CrovusClient(string token, GatewayIntents intents)
@@ -94,6 +100,12 @@ public sealed class CrovusClient : IAsyncDisposable
         Presences = new PresenceTracker(Diagnostics, options.PresenceCapacity);
         Services = new DiscordServices(Rest, Diagnostics);
         _resolver = options.ResolveEntities ? new DiscordEventResolver(Cache, Diagnostics) : null;
+
+        if (Rest is IContextAware boundRest)
+            boundRest.Context = this;
+
+        if (Cache is IContextAware boundCache)
+            boundCache.Context = this;
     }
 
     public DiagnosticsHub Diagnostics { get; }
@@ -264,6 +276,8 @@ public sealed class CrovusClient : IAsyncDisposable
 
                 if (_resolver is { } resolver)
                     decoded = await resolver.ResolveAsync(decoded, cancellationToken);
+
+                decoded = DiscordEventBinder.Bind(decoded, this);
 
                 Interlocked.Increment(ref _dispatched);
 

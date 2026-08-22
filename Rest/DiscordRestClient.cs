@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Crovus.Client;
 using Crovus.Factory;
 using Crovus.Logs;
 using Crovus.Models;
@@ -11,7 +12,7 @@ using Crovus.Json;
 
 namespace Crovus.Rest;
 
-public sealed class DiscordRestClient : IDiscordRest
+public sealed class DiscordRestClient : IDiscordRest, IContextAware
 {
     private const string LogCategory = "Rest.Http";
     private const int MaxMessagePageSize = 100;
@@ -27,6 +28,7 @@ public sealed class DiscordRestClient : IDiscordRest
     private readonly TimeProvider _time;
     private readonly string _authorization;
 
+    private ICrovusContext? _context;
     private bool _disposed;
 
     public DiscordRestClient(DiscordRestOptions options, HttpClient? httpClient = null, RateLimiter? rateLimiter = null,
@@ -56,6 +58,12 @@ public sealed class DiscordRestClient : IDiscordRest
         RateLimiter? rateLimiter = null, TimeProvider? timeProvider = null)
         : this(options, httpClient, rateLimiter, diagnostics, diagnostics, timeProvider)
     {
+    }
+
+    public ICrovusContext? Context
+    {
+        get => _context ??= new RestContext(this, _logger, _telemetry);
+        set => _context = value;
     }
 
     public async Task<DiscordChannel> GetChannelAsync(Snowflake channelId,
@@ -1503,7 +1511,9 @@ public sealed class DiscordRestClient : IDiscordRest
 
         try
         {
-            return await JsonSerializer.DeserializeAsync<T>(stream, DiscordJson.Options, cancellationToken)
+            return EntityBinder.Bind(
+                       await JsonSerializer.DeserializeAsync<T>(stream, DiscordJson.Options, cancellationToken),
+                       Context)
                    ?? throw new DiscordRestException($"{route} returned an empty body.", response.StatusCode, null,
                        route.ToString());
         }

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -9,7 +10,7 @@ public enum InviteTargetType
     EmbeddedApplication = 2
 }
 
-public sealed record DiscordInvite
+public sealed record DiscordInvite : IBoundEntity
 {
     public required string Code { get; init; }
 
@@ -64,4 +65,22 @@ public sealed record DiscordInvite
     public bool IsExpired => ExpiresAt is { } expiry && expiry <= DateTimeOffset.UtcNow;
 
     public override string ToString() => Url;
+
+    private EntityBinding _binding;
+
+    public DiscordInvite Bind(ICrovusContext context)
+    {
+        var bound = this with {
+            Inviter = Inviter?.Bind(context),
+            TargetUser = TargetUser?.Bind(context)
+        };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

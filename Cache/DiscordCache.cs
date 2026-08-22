@@ -1,9 +1,10 @@
+using Crovus.Client;
 using Crovus.Logs;
 using Crovus.Models;
 
 namespace Crovus.Cache;
 
-public sealed class DiscordCache : IDiscordCache
+public sealed class DiscordCache : IDiscordCache, IContextAware
 {
     private const string LogCategory = "Cache";
 
@@ -52,6 +53,8 @@ public sealed class DiscordCache : IDiscordCache
         : this(options, storeFactory, diagnostics, diagnostics, timeProvider)
     {
     }
+
+    public ICrovusContext? Context { get; set; }
 
     public CacheStatistics Statistics => new(
         Interlocked.Read(ref _hits),
@@ -343,7 +346,7 @@ public sealed class DiscordCache : IDiscordCache
     private async ValueTask StoreAsync<TKey, TValue>(ICacheStore<TKey, TValue> store, TKey key, TValue value,
         string entity, CancellationToken cancellationToken) where TKey : notnull
     {
-        await store.SetAsync(key, value, cancellationToken);
+        await store.SetAsync(key, EntityBinder.Bind(value, Context), cancellationToken);
 
         Interlocked.Increment(ref _writes);
 

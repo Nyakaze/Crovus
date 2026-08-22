@@ -51,7 +51,7 @@ public static class DiscordEventFactory
             Guild(data),
             ReadEmoji(data))
         {
-            Member = ReadOptionalMember(data)
+            Member = ReadOptionalMember(data, DiscordUser.Partial(data.RequireSnowflake("user_id")))
         },
 
         "MESSAGE_REACTION_REMOVE" => new ReactionRemovedEvent(
@@ -61,7 +61,7 @@ public static class DiscordEventFactory
             Guild(data),
             ReadEmoji(data))
         {
-            Member = ReadOptionalMember(data)
+            Member = ReadOptionalMember(data, DiscordUser.Partial(data.RequireSnowflake("user_id")))
         },
 
         "MESSAGE_REACTION_REMOVE_ALL" => new ReactionsClearedEvent(
@@ -142,7 +142,7 @@ public static class DiscordEventFactory
             DiscordUser.Partial(data.RequireSnowflake("user_id")),
             Guild(data))
         {
-            Member = ReadOptionalMember(data),
+            Member = ReadOptionalMember(data, DiscordUser.Partial(data.RequireSnowflake("user_id"))),
             StartedAt = data.Int32OrNull("timestamp") is { } seconds
                 ? DateTimeOffset.FromUnixTimeSeconds(seconds)
                 : null
@@ -305,7 +305,7 @@ public static class DiscordEventFactory
             DiscordChannel.Partial(message.ChannelId, message.GuildId),
             message.GuildId is { } guildId ? DiscordGuild.Partial(guildId) : null)
         {
-            Member = ReadOptionalMember(data) is { } member ? member with { User = message.Author } : null
+            Member = ReadOptionalMember(data, message.Author)
         };
     }
 
@@ -405,11 +405,12 @@ public static class DiscordEventFactory
         return member.GuildId is null ? member.In(data.RequireSnowflake("guild_id")) : member;
     }
 
-    private static DiscordMember? ReadOptionalMember(JsonElement data)
+    private static DiscordMember? ReadOptionalMember(JsonElement data, DiscordUser? fallbackUser = null)
     {
-        if (data.Property("member") is not { ValueKind: JsonValueKind.Object } element ||
-            element.Deserialize<DiscordMember>(DiscordJson.Options) is not { } member)
+        if (data.Property("member") is not { ValueKind: JsonValueKind.Object } element)
             return null;
+
+        var member = DiscordMemberConverter.Read(element, DiscordJson.Options, fallbackUser);
 
         return member.GuildId is null && data.SnowflakeOrNull("guild_id") is { } guildId
             ? member.In(guildId)

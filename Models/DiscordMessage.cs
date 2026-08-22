@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -6,7 +7,7 @@ public sealed record DiscordMessage(Snowflake Id, Snowflake ChannelId, Snowflake
     DiscordUser Author, string Content, bool IsWebhook,
     IReadOnlyList<DiscordAttachment> Attachments,
     IReadOnlyList<DiscordEmbed> Embeds,
-    DiscordMessageReference? ReferencedMessage)
+    DiscordMessageReference? ReferencedMessage) : IBoundEntity
 {
     [JsonIgnore]
     public bool IsPartial { get; init; }
@@ -33,4 +34,19 @@ public sealed record DiscordMessage(Snowflake Id, Snowflake ChannelId, Snowflake
     public IEnumerable<DiscordButton> Buttons => AllComponents.OfType<DiscordButton>();
 
     public IEnumerable<DiscordSelectMenu> SelectMenus => AllComponents.OfType<DiscordSelectMenu>();
+
+    private EntityBinding _binding;
+
+    public DiscordMessage Bind(ICrovusContext context)
+    {
+        var bound = this with { Author = Author.Bind(context) };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

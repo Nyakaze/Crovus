@@ -1,3 +1,5 @@
+using Crovus.Client;
+
 namespace Crovus.Models;
 
 public enum ThreadArchiveDuration
@@ -94,7 +96,7 @@ public sealed record ArchivedThreadQuery
 }
 
 public sealed record ThreadListing(IReadOnlyList<DiscordChannel> Threads,
-    IReadOnlyList<DiscordThreadMember> Members, bool HasMore)
+    IReadOnlyList<DiscordThreadMember> Members, bool HasMore) : IBoundEntity
 {
     public static readonly ThreadListing Empty = new([], [], false);
 
@@ -120,4 +122,22 @@ public sealed record ThreadListing(IReadOnlyList<DiscordChannel> Threads,
             Members = Members.Where(member => member.ThreadId is { } id && ids.Contains(id)).ToArray()
         };
     }
+
+    private EntityBinding _binding;
+
+    public ThreadListing Bind(ICrovusContext context)
+    {
+        var bound = this with {
+            Threads = EntityBinder.BindAll(Threads, context),
+            Members = EntityBinder.BindAll(Members, context)
+        };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

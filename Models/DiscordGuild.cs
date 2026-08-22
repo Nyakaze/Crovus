@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -46,7 +47,7 @@ public enum PremiumTier
     Tier3 = 3
 }
 
-public sealed record DiscordGuild
+public sealed record DiscordGuild : IBoundEntity
 {
     public required Snowflake Id { get; init; }
 
@@ -198,4 +199,22 @@ public sealed record DiscordGuild
     }
 
     public override string ToString() => $"{Name} ({Id.Value})";
+
+    private EntityBinding _binding;
+
+    public DiscordGuild Bind(ICrovusContext context)
+    {
+        var bound = this with {
+            Roles = EntityBinder.BindAll(Roles, context),
+            Emojis = EntityBinder.BindAll(Emojis, context)
+        };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

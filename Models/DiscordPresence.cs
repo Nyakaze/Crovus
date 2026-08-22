@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -160,7 +161,7 @@ public sealed record DiscordClientStatus(UserStatus? Desktop, UserStatus? Mobile
     public bool IsOnAnyClient => IsOnDesktop || IsOnMobile || IsOnWeb;
 }
 
-public sealed record DiscordPresence
+public sealed record DiscordPresence : IBoundEntity
 {
     public required Snowflake UserId { get; init; }
 
@@ -223,4 +224,19 @@ public sealed record DiscordPresence
 
     public override string ToString() =>
         Primary is { } activity ? $"{Status} - {activity}" : Status.ToString();
+
+    private EntityBinding _binding;
+
+    public DiscordPresence Bind(ICrovusContext context)
+    {
+        var bound = this with { User = User?.Bind(context) };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

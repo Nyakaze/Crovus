@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -12,7 +13,7 @@ public enum GuildMemberFlags
     StartedOnboarding = 1 << 3
 }
 
-public sealed record DiscordMember
+public sealed record DiscordMember : IBoundEntity
 {
     public static readonly TimeSpan MaxTimeout = TimeSpan.FromDays(28);
 
@@ -91,6 +92,38 @@ public sealed record DiscordMember
     public DiscordMember In(Snowflake guildId) => this with { GuildId = guildId };
 
     public override string ToString() => $"{DisplayName} ({User.Id.Value})";
+
+    private EntityBinding _binding;
+
+    public DiscordMember Bind(ICrovusContext context)
+    {
+        var bound = this with { User = User.Bind(context) };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }
 
-public sealed record DiscordBan(DiscordUser User, string? Reason);
+public sealed record DiscordBan(DiscordUser User, string? Reason) : IBoundEntity
+{
+    private EntityBinding _binding;
+
+    public DiscordBan Bind(ICrovusContext context)
+    {
+        var bound = this with { User = User.Bind(context) };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
+}
+

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -10,7 +11,7 @@ public enum IntegrationExpireBehavior
 
 public sealed record DiscordIntegrationAccount(string Id, string Name);
 
-public sealed record DiscordIntegration
+public sealed record DiscordIntegration : IBoundEntity
 {
     public required Snowflake Id { get; init; }
 
@@ -64,4 +65,19 @@ public sealed record DiscordIntegration
     public DiscordIntegration In(Snowflake guildId) => GuildId is null ? this with { GuildId = guildId } : this;
 
     public override string ToString() => $"{Name} ({Type})";
+
+    private EntityBinding _binding;
+
+    public DiscordIntegration Bind(ICrovusContext context)
+    {
+        var bound = this with { User = User?.Bind(context) };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

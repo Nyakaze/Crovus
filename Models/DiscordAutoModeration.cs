@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -60,7 +61,7 @@ public sealed record AutoModerationAction
     public override string ToString() => Type.ToString();
 }
 
-public sealed record DiscordAutoModerationRule
+public sealed record DiscordAutoModerationRule : IBoundEntity
 {
     public required Snowflake Id { get; init; }
 
@@ -102,4 +103,19 @@ public sealed record DiscordAutoModerationRule
     public DiscordAutoModerationRule In(Snowflake guildId) => GuildId is null ? this with { GuildId = guildId } : this;
 
     public override string ToString() => Name;
+
+    private EntityBinding _binding;
+
+    public DiscordAutoModerationRule Bind(ICrovusContext context)
+    {
+        var bound = this with { };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }

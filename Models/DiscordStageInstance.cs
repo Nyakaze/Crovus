@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Crovus.Client;
 
 namespace Crovus.Models;
 
@@ -8,7 +9,7 @@ public enum StagePrivacyLevel
     GuildOnly = 2
 }
 
-public sealed record DiscordStageInstance
+public sealed record DiscordStageInstance : IBoundEntity
 {
     public required Snowflake Id { get; init; }
 
@@ -34,4 +35,19 @@ public sealed record DiscordStageInstance
     public DiscordStageInstance In(Snowflake guildId) => GuildId is null ? this with { GuildId = guildId } : this;
 
     public override string ToString() => Topic;
+
+    private EntityBinding _binding;
+
+    public DiscordStageInstance Bind(ICrovusContext context)
+    {
+        var bound = this with { };
+
+        bound._binding = EntityBinding.To(context);
+
+        return bound;
+    }
+
+    ICrovusContext? IBoundEntity.Context => _binding.Context;
+
+    IBoundEntity IBoundEntity.WithContext(ICrovusContext context) => Bind(context);
 }
