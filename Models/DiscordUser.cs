@@ -4,13 +4,13 @@ using Crovus.Client;
 namespace Crovus.Models;
 
 public sealed record DiscordUser(Snowflake Id, string Username, string? GlobalName, string? Discriminator,
-    string? Avatar, bool IsBot) : IBoundEntity
+    string? Avatar, bool? IsBot) : IBoundEntity
 {
     [JsonIgnore]
     public bool IsPartial { get; init; }
 
     public static DiscordUser Partial(Snowflake id) =>
-        new(id, string.Empty, null, null, null, false) { IsPartial = true };
+        new(id, string.Empty, null, null, null, null) { IsPartial = true };
 
     public string DisplayName => GlobalName ?? (Username.Length > 0 ? Username : Id.ToString());
 

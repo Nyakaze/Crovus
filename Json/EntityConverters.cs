@@ -143,14 +143,18 @@ public sealed class DiscordMessageConverter : JsonConverter<DiscordMessage>
     {
         var element = JsonElement.ParseValue(ref reader);
 
+        var isWebhook = element.Property("webhook_id") is not null;
+
+        var author = element.Deserialize<DiscordUser>("author", options) ??
+                     new DiscordUser(default, string.Empty, null, null, null, null);
+
         return new DiscordMessage(
             element.RequireSnowflake("id"),
             element.RequireSnowflake("channel_id"),
             element.SnowflakeOrNull("guild_id"),
-            element.Deserialize<DiscordUser>("author", options) ??
-            new DiscordUser(default, string.Empty, null, null, null, false),
+            isWebhook ? author with { IsBot = true } : author,
             element.StringOrNull("content") ?? string.Empty,
-            element.Property("webhook_id") is not null,
+            isWebhook,
             element.DeserializeList<DiscordAttachment>("attachments", options),
             element.DeserializeList<DiscordEmbed>("embeds", options),
             element.Deserialize<DiscordMessageReference>("message_reference", options))

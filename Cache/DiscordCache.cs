@@ -88,7 +88,9 @@ public sealed class DiscordCache : IDiscordCache, IContextAware
         ArgumentNullException.ThrowIfNull(message);
 
         await StoreAsync(_messages, message.Id, message, "messages", cancellationToken);
-        await SetUserAsync(message.Author, cancellationToken);
+
+        if (!message.IsWebhook)
+            await SetUserAsync(message.Author, cancellationToken);
     }
 
     public async ValueTask RemoveMessageAsync(Snowflake messageId, CancellationToken cancellationToken = default)
