@@ -173,6 +173,15 @@ public sealed class CrovusClient : IAsyncDisposable, ICrovusContext
     public IDisposable OnPresenceUpdate(Snowflake userId, Func<PresenceUpdatedEvent, Task> handler) =>
         Presences.OnUser(userId, handler);
 
+    public IDisposable OnActivity(ActivityTypes types, Func<PresenceUpdatedEvent, Task> handler) =>
+        Presences.OnActivity(types, handler);
+
+    public IDisposable OnActivity(Snowflake userId, ActivityTypes types,
+        Func<PresenceUpdatedEvent, Task> handler) => Presences.OnUserActivity(userId, types, handler);
+
+    public IDisposable OnGuildActivity(Snowflake guildId, ActivityTypes types,
+        Func<PresenceUpdatedEvent, Task> handler) => Presences.OnGuildActivity(guildId, types, handler);
+
     public DiscordPresence? PresenceOf(Snowflake userId) => Presences.Get(userId);
 
     public UserStatus StatusOf(Snowflake userId) => Presences.StatusOf(userId);

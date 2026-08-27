@@ -54,6 +54,16 @@ public static class UserFluent
     public static DiscordActivity? GetActivity(this DiscordUser user) =>
         user.Context().Presences?.ActivityOf(user.Id);
 
+    public static DiscordActivity? GetActivity(this DiscordUser user, ActivityTypes types) =>
+        user.Context().Presences?.ActivityOf(user.Id, types);
+
+    public static IReadOnlyList<DiscordActivity> GetActivities(this DiscordUser user,
+        ActivityTypes types = ActivityTypes.All) =>
+        user.Context().Presences?.ActivitiesOf(user.Id, types) ?? [];
+
     public static bool IsOnline(this DiscordUser user) =>
         user.Context().Presences?.IsOnline(user.Id) ?? false;
+
+    public static bool IsDoing(this DiscordUser user, ActivityTypes types) =>
+        user.GetPresence() is { } presence && presence.Has(types);
 }

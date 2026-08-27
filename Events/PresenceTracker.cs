@@ -63,6 +63,17 @@ public sealed class PresenceTracker
     public IReadOnlyCollection<DiscordPresence> WithStatus(UserStatus status) =>
         _presences.Values.Where(presence => presence.Status == status).ToArray();
 
+    public IReadOnlyCollection<DiscordPresence> WithActivity(ActivityTypes types) =>
+        _presences.Values.Where(presence => presence.Has(types)).ToArray();
+
+    public IReadOnlyCollection<DiscordPresence> WithActivity(ActivityType type, string name) =>
+        _presences.Values.Where(presence => presence.Has(type, name)).ToArray();
+
+    public IReadOnlyList<DiscordActivity> ActivitiesOf(Snowflake userId, ActivityTypes types) =>
+        Get(userId)?.ActivitiesOf(types) ?? [];
+
+    public DiscordActivity? ActivityOf(Snowflake userId, ActivityTypes types) => Get(userId)?.Find(types);
+
     public IDisposable OnUpdate(Func<PresenceUpdatedEvent, Task> handler, string? name = null) =>
         OnUpdate(Wrap(handler), name ?? Describe(handler));
 
@@ -146,6 +157,60 @@ public sealed class PresenceTracker
             name ?? Describe(handler));
     }
 
+    public IDisposable OnActivity(ActivityTypes types, Func<PresenceUpdatedEvent, Task> handler,
+        string? name = null) => OnActivity(types, Wrap(handler), name ?? Describe(handler));
+
+    public IDisposable OnActivity(ActivityTypes types, Func<PresenceUpdatedEvent, CancellationToken, Task> handler,
+        string? name = null)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+
+        return Register(Scope.Global, default, handler, updated => updated.Changed(types),
+            name ?? Describe(handler));
+    }
+
+    public IDisposable OnUserActivity(Snowflake userId, ActivityTypes types,
+        Func<PresenceUpdatedEvent, Task> handler, string? name = null) =>
+        OnUserActivity(userId, types, Wrap(handler), name ?? Describe(handler));
+
+    public IDisposable OnUserActivity(Snowflake userId, ActivityTypes types,
+        Func<PresenceUpdatedEvent, CancellationToken, Task> handler, string? name = null)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+
+        return Register(Scope.User, userId, handler, updated => updated.Changed(types), name ?? Describe(handler));
+    }
+
+    public IDisposable OnGuildActivity(Snowflake guildId, ActivityTypes types,
+        Func<PresenceUpdatedEvent, Task> handler, string? name = null) =>
+        OnGuildActivity(guildId, types, Wrap(handler), name ?? Describe(handler));
+
+    public IDisposable OnGuildActivity(Snowflake guildId, ActivityTypes types,
+        Func<PresenceUpdatedEvent, CancellationToken, Task> handler, string? name = null)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+
+        return Register(Scope.Guild, guildId, handler, updated => updated.Changed(types), name ?? Describe(handler));
+    }
+
+    public IDisposable OnPlaying(Func<PresenceUpdatedEvent, Task> handler, string? name = null) =>
+        OnActivity(ActivityTypes.Playing, handler, name ?? Describe(handler));
+
+    public IDisposable OnStreaming(Func<PresenceUpdatedEvent, Task> handler, string? name = null) =>
+        OnActivity(ActivityTypes.Streaming, handler, name ?? Describe(handler));
+
+    public IDisposable OnListening(Func<PresenceUpdatedEvent, Task> handler, string? name = null) =>
+        OnActivity(ActivityTypes.Listening, handler, name ?? Describe(handler));
+
+    public IDisposable OnWatching(Func<PresenceUpdatedEvent, Task> handler, string? name = null) =>
+        OnActivity(ActivityTypes.Watching, handler, name ?? Describe(handler));
+
+    public IDisposable OnCompeting(Func<PresenceUpdatedEvent, Task> handler, string? name = null) =>
+        OnActivity(ActivityTypes.Competing, handler, name ?? Describe(handler));
+
+    public IDisposable OnCustomStatus(Func<PresenceUpdatedEvent, Task> handler, string? name = null) =>
+        OnActivity(ActivityTypes.Custom, handler, name ?? Describe(handler));
+
     public IDisposable OnOnline(Func<PresenceUpdatedEvent, Task> handler, string? name = null)
     {
         ArgumentNullException.ThrowIfNull(handler);
@@ -179,8 +244,12 @@ public sealed class PresenceTracker
         return await completion.Task;
     }
 
+    public IAsyncEnumerable<PresenceUpdatedEvent> WatchAsync(ActivityTypes types, Snowflake? userId = null,
+        int capacity = 64, CancellationToken cancellationToken = default) =>
+        WatchAsync(userId, capacity, types, cancellationToken);
+
     public async IAsyncEnumerable<PresenceUpdatedEvent> WatchAsync(Snowflake? userId = null, int capacity = 64,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        ActivityTypes? types = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var channel = Channel.CreateBounded<PresenceUpdatedEvent>(new BoundedChannelOptions(capacity)
         {
@@ -194,9 +263,13 @@ public sealed class PresenceTracker
             return Task.CompletedTask;
         }
 
-        using var subscription = userId is { } id
-            ? OnUser(id, Publish, "WatchAsync")
-            : OnUpdate(Publish, "WatchAsync");
+        using var subscription = (userId, types) switch
+        {
+            ({ } id, { } filter) => OnUserActivity(id, filter, Publish, "WatchAsync"),
+            ({ } id, null) => OnUser(id, Publish, "WatchAsync"),
+            (null, { } filter) => OnActivity(filter, Publish, "WatchAsync"),
+            _ => OnUpdate(Publish, "WatchAsync")
+        };
 
         await foreach (var updated in channel.Reader.ReadAllAsync(cancellationToken))
             yield return updated;

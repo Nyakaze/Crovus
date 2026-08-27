@@ -213,12 +213,34 @@ public sealed record DiscordPresence : IBoundEntity
     [JsonIgnore]
     public string? CustomText => CustomStatus?.CustomText;
 
+    [JsonIgnore]
+    public ActivityTypes ActiveTypes => Activities.Types();
+
     public DiscordActivity? Find(ActivityType type) =>
         Activities.FirstOrDefault(activity => activity.Type == type);
 
-    public bool IsPlaying(string name) => Activities.Any(activity =>
-        activity.Type is ActivityType.Playing &&
+    public DiscordActivity? Find(ActivityTypes types) =>
+        Activities.FirstOrDefault(activity => types.Includes(activity.Type));
+
+    public IReadOnlyList<DiscordActivity> ActivitiesOf(ActivityTypes types) => [.. Activities.WithTypes(types)];
+
+    public IReadOnlyList<DiscordActivity> ActivitiesOf(ActivityType type) => [.. Activities.WithType(type)];
+
+    public bool Has(ActivityTypes types) => Activities.HasAny(types);
+
+    public bool Has(ActivityType type) => Find(type) is not null;
+
+    public bool Has(ActivityType type, string name) => Activities.Any(activity =>
+        activity.Type == type &&
         string.Equals(activity.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    public bool IsPlaying(string name) => Has(ActivityType.Playing, name);
+
+    public bool IsListeningTo(string name) => Has(ActivityType.Listening, name);
+
+    public bool IsWatching(string name) => Has(ActivityType.Watching, name);
+
+    public bool IsCompetingIn(string name) => Has(ActivityType.Competing, name);
 
     public DiscordPresence In(Snowflake guildId) => this with { GuildId = guildId };
 

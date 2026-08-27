@@ -365,6 +365,25 @@ public sealed record PresenceUpdatedEvent(DiscordPresence Presence, DiscordPrese
 
     public IReadOnlyList<DiscordActivity> StoppedActivities => Difference(Previous, Presence);
 
+    public ActivityTypes ActiveTypes => Presence.ActiveTypes;
+
+    public ActivityTypes StartedTypes => StartedActivities.Types();
+
+    public ActivityTypes StoppedTypes => StoppedActivities.Types();
+
+    public ActivityTypes ChangedTypes => StartedTypes | StoppedTypes;
+
+    public IReadOnlyList<DiscordActivity> Started(ActivityTypes types) => [.. StartedActivities.WithTypes(types)];
+
+    public IReadOnlyList<DiscordActivity> Stopped(ActivityTypes types) => [.. StoppedActivities.WithTypes(types)];
+
+    public IReadOnlyList<DiscordActivity> Current(ActivityTypes types) => Presence.ActivitiesOf(types);
+
+    public bool Changed(ActivityTypes types) =>
+        StartedActivities.HasAny(types) || StoppedActivities.HasAny(types);
+
+    public bool Has(ActivityTypes types) => Presence.Has(types);
+
     private static IReadOnlyList<DiscordActivity> Difference(DiscordPresence? source, DiscordPresence? other)
     {
         if (source is null || source.Activities.Count == 0)
