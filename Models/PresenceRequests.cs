@@ -6,6 +6,8 @@ public sealed record PresenceActivity(string Name, ActivityType Type, string? Ur
 
     public static PresenceActivity Listening(string name) => new(name, ActivityType.Listening);
 
+    public static PresenceActivity ListeningTo(string name) => Listening(name);
+
     public static PresenceActivity Watching(string name) => new(name, ActivityType.Watching);
 
     public static PresenceActivity Competing(string name) => new(name, ActivityType.Competing);
@@ -44,6 +46,9 @@ public sealed record PresenceUpdate
 
     public static PresenceUpdate Listening(string name, UserStatus status = UserStatus.Online) =>
         With(PresenceActivity.Listening(name), status);
+
+    public static PresenceUpdate ListeningTo(string name, UserStatus status = UserStatus.Online) =>
+        Listening(name, status);
 
     public static PresenceUpdate Watching(string name, UserStatus status = UserStatus.Online) =>
         With(PresenceActivity.Watching(name), status);

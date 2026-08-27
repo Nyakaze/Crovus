@@ -202,6 +202,9 @@ public sealed class PresenceTracker
     public IDisposable OnListening(Func<PresenceUpdatedEvent, Task> handler, string? name = null) =>
         OnActivity(ActivityTypes.Listening, handler, name ?? Describe(handler));
 
+    public IDisposable OnListeningTo(Func<PresenceUpdatedEvent, Task> handler, string? name = null) =>
+        OnListening(handler, name);
+
     public IDisposable OnWatching(Func<PresenceUpdatedEvent, Task> handler, string? name = null) =>
         OnActivity(ActivityTypes.Watching, handler, name ?? Describe(handler));
 

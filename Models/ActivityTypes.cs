@@ -6,7 +6,8 @@ public enum ActivityTypes
     None = 0,
     Playing = 1 << 0,
     Streaming = 1 << 1,
-    Listening = 1 << 2,
+    ListeningTo = 1 << 2,
+    Listening = ListeningTo,
     Watching = 1 << 3,
     Custom = 1 << 4,
     Competing = 1 << 5,
@@ -91,6 +92,9 @@ public static class ActivityFilters
 
     public static IEnumerable<DiscordActivity> Listening(this IEnumerable<DiscordActivity> activities) =>
         activities.WithType(ActivityType.Listening);
+
+    public static IEnumerable<DiscordActivity> ListeningTo(this IEnumerable<DiscordActivity> activities) =>
+        activities.Listening();
 
     public static IEnumerable<DiscordActivity> Watching(this IEnumerable<DiscordActivity> activities) =>
         activities.WithType(ActivityType.Watching);
