@@ -294,6 +294,51 @@ public sealed class DiscordRestClient : IDiscordRest, IContextAware
         return await ReadAsync<DiscordMessage>(response, route, cancellationToken);
     }
 
+    public async Task<DiscordMessage> EditWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
+        MessageEditRequest request, Snowflake? threadId = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(webhook);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var token = RequireToken(webhook);
+
+        var route = RouteKey.Patch("/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}",
+            webhook.Id.ToString());
+        var path = $"webhooks/{webhook.Id}/{Uri.EscapeDataString(token)}/messages/{messageId}";
+
+        if (threadId is { } thread)
+            path += $"?thread_id={thread}";
+
+        var payload = MessageEditPayload.From(request);
+
+        using var response = await SendAsync(route, path,
+            Body(route, payload, request.Files, request.Components, nameof(request)),
+            authorize: false, cancellationToken: cancellationToken);
+
+        return await ReadAsync<DiscordMessage>(response, route, cancellationToken);
+    }
+
+    public async Task DeleteWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
+        Snowflake? threadId = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(webhook);
+
+        var token = RequireToken(webhook);
+
+        var route = RouteKey.Delete("/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}",
+            webhook.Id.ToString());
+        var path = $"webhooks/{webhook.Id}/{Uri.EscapeDataString(token)}/messages/{messageId}";
+
+        if (threadId is { } thread)
+            path += $"?thread_id={thread}";
+
+        using var response = await SendAsync(route, path, authorize: false, cancellationToken: cancellationToken);
+    }
+
+    private static string RequireToken(DiscordWebhook webhook) =>
+        webhook.Token ?? throw new InvalidOperationException(
+            $"Webhook {webhook.Id} has no token and cannot be executed.");
+
     public async Task<DiscordChannel> CreateChannelAsync(Snowflake guildId, ChannelCreateRequest request,
         string? reason = null, CancellationToken cancellationToken = default)
     {

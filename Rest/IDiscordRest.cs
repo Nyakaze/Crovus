@@ -45,6 +45,12 @@ public interface IDiscordRest : IAsyncDisposable
     Task<DiscordMessage?> ExecuteWebhookAsync(DiscordWebhook webhook, WebhookExecuteRequest request,
         Snowflake? threadId = null, bool wait = false, CancellationToken cancellationToken = default);
 
+    Task<DiscordMessage> EditWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
+        MessageEditRequest request, Snowflake? threadId = null, CancellationToken cancellationToken = default);
+
+    Task DeleteWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId, Snowflake? threadId = null,
+        CancellationToken cancellationToken = default);
+
     Task<DiscordChannel> CreateChannelAsync(Snowflake guildId, ChannelCreateRequest request, string? reason = null,
         CancellationToken cancellationToken = default);
 

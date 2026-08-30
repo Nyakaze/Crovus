@@ -138,6 +138,39 @@ public sealed class WebhookService : DiscordService
         bool wait = false, CancellationToken cancellationToken = default) =>
         SendAsync(webhook, WebhookMessageFactory.Create(content).Build(), threadId, wait, cancellationToken);
 
+    public Task<DiscordMessage> EditMessageAsync(DiscordWebhook webhook, Snowflake messageId,
+        MessageEditRequest request, Snowflake? threadId = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(webhook);
+        ArgumentNullException.ThrowIfNull(request);
+
+        return TrackAsync(nameof(EditMessageAsync), $"message {messageId} of webhook {webhook.Id}",
+            () => Rest.EditWebhookMessageAsync(webhook, messageId, request, threadId, cancellationToken),
+            message => $"Edited webhook message {message.Id}");
+    }
+
+    public Task<DiscordMessage> EditMessageAsync(DiscordWebhook webhook, Snowflake messageId,
+        Action<MessageFactory> configure, Snowflake? threadId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var factory = MessageFactory.Create();
+        configure(factory);
+
+        return EditMessageAsync(webhook, messageId, factory.BuildEdit(), threadId, cancellationToken);
+    }
+
+    public Task DeleteMessageAsync(DiscordWebhook webhook, Snowflake messageId, Snowflake? threadId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(webhook);
+
+        return TrackAsync(nameof(DeleteMessageAsync), $"message {messageId} of webhook {webhook.Id}",
+            () => Rest.DeleteWebhookMessageAsync(webhook, messageId, threadId, cancellationToken),
+            $"Deleted webhook message {messageId}");
+    }
+
     public async Task<DiscordMessage?> SendAsAsync(Snowflake channelId, string webhookName,
         Action<WebhookMessageFactory> configure, Snowflake? threadId = null, bool wait = false,
         CancellationToken cancellationToken = default)

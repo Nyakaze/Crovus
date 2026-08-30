@@ -183,6 +183,22 @@ public sealed class CachedDiscordRest : IDiscordRest, IContextAware
         return message;
     }
 
+    public async Task<DiscordMessage> EditWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
+        MessageEditRequest request, Snowflake? threadId = null, CancellationToken cancellationToken = default)
+    {
+        var message = await _inner.EditWebhookMessageAsync(webhook, messageId, request, threadId, cancellationToken);
+        await _cache.SetMessageAsync(message, cancellationToken);
+
+        return message;
+    }
+
+    public async Task DeleteWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
+        Snowflake? threadId = null, CancellationToken cancellationToken = default)
+    {
+        await _inner.DeleteWebhookMessageAsync(webhook, messageId, threadId, cancellationToken);
+        await _cache.RemoveMessageAsync(messageId, cancellationToken);
+    }
+
     public async Task<DiscordChannel> CreateChannelAsync(Snowflake guildId, ChannelCreateRequest request,
         string? reason = null, CancellationToken cancellationToken = default)
     {

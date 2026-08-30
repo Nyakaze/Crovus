@@ -20,6 +20,12 @@ public sealed record DiscordMessage(Snowflake Id, Snowflake ChannelId, Snowflake
 
     public DiscordMessage In(Snowflake guildId) => GuildId is null ? this with { GuildId = guildId } : this;
 
+    public bool MentionsEveryone { get; init; }
+
+    public IReadOnlyList<DiscordUser> Mentions { get; init; } = [];
+
+    public DiscordMessage? ReplyTo { get; init; }
+
     public IReadOnlyList<DiscordComponent> Components { get; init; } = [];
 
     public bool HasComponents => Components.Count > 0;
@@ -39,7 +45,12 @@ public sealed record DiscordMessage(Snowflake Id, Snowflake ChannelId, Snowflake
 
     public DiscordMessage Bind(ICrovusContext context)
     {
-        var bound = this with { Author = Author.Bind(context) };
+        var bound = this with
+        {
+            Author = Author.Bind(context),
+            Mentions = Mentions.Count == 0 ? Mentions : [.. Mentions.Select(user => user.Bind(context))],
+            ReplyTo = ReplyTo?.Bind(context),
+        };
 
         bound._binding = EntityBinding.To(context);
 
