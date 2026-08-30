@@ -24,6 +24,20 @@ public interface IDiscordCache
 {
     CacheStatistics Statistics { get; }
 
+    long ChannelsVersion { get; }
+
+    IReadOnlyList<DiscordGuild> Guilds { get; }
+
+    IReadOnlyList<DiscordChannel> Channels { get; }
+
+    DiscordChannel? FindChannel(Snowflake channelId);
+
+    IReadOnlyList<DiscordChannel> ThreadsOf(Snowflake parentId);
+
+    DiscordMember? FindMember(Snowflake guildId, Snowflake userId);
+
+    DiscordRole? FindRole(Snowflake roleId);
+
     ValueTask<DiscordChannel?> GetChannelAsync(Snowflake channelId, CancellationToken cancellationToken = default);
 
     ValueTask SetChannelAsync(DiscordChannel channel, CancellationToken cancellationToken = default);

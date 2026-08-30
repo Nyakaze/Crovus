@@ -12,6 +12,20 @@ public sealed class NullDiscordCache : IDiscordCache
 
     public CacheStatistics Statistics { get; } = new(0, 0, 0, 0);
 
+    public long ChannelsVersion => 0;
+
+    public IReadOnlyList<DiscordGuild> Guilds { get; } = [];
+
+    public IReadOnlyList<DiscordChannel> Channels { get; } = [];
+
+    public DiscordChannel? FindChannel(Snowflake channelId) => null;
+
+    public IReadOnlyList<DiscordChannel> ThreadsOf(Snowflake parentId) => [];
+
+    public DiscordMember? FindMember(Snowflake guildId, Snowflake userId) => null;
+
+    public DiscordRole? FindRole(Snowflake roleId) => null;
+
     public ValueTask<DiscordChannel?> GetChannelAsync(Snowflake channelId,
         CancellationToken cancellationToken = default) => default;
 

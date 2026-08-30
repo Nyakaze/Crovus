@@ -62,6 +62,31 @@ public sealed class DiscordCache : IDiscordCache, IContextAware
         Interlocked.Read(ref _writes),
         Interlocked.Read(ref _invalidations));
 
+    public long ChannelsVersion => _channels.Version;
+
+    public IReadOnlyList<DiscordGuild> Guilds => _guilds.Snapshot();
+
+    public IReadOnlyList<DiscordChannel> Channels => _channels.Snapshot();
+
+    public DiscordChannel? FindChannel(Snowflake channelId) =>
+        _channels.TryGet(channelId, out var channel) ? channel : null;
+
+    public IReadOnlyList<DiscordChannel> ThreadsOf(Snowflake parentId) =>
+        _channels.Snapshot().Where(channel => channel.IsThread && channel.ParentId == parentId).ToArray();
+
+    public DiscordMember? FindMember(Snowflake guildId, Snowflake userId) =>
+        _members.TryGet(new MemberKey(guildId, userId), out var member) ? member : null;
+
+    public DiscordRole? FindRole(Snowflake roleId)
+    {
+        foreach (var roles in _guildRoles.Snapshot())
+            foreach (var role in roles)
+                if (role.Id == roleId)
+                    return role;
+
+        return null;
+    }
+
     public ValueTask<DiscordChannel?> GetChannelAsync(Snowflake channelId,
         CancellationToken cancellationToken = default) =>
         LookupAsync(_channels, channelId, "channels", channelId.ToString(), cancellationToken);
@@ -242,6 +267,14 @@ public sealed class DiscordCache : IDiscordCache, IContextAware
     {
         await InvalidateAsync(_guilds, guildId, "guilds", cancellationToken);
         await InvalidateAsync(_guildRoles, guildId, "guild-roles", cancellationToken);
+
+        foreach (var channel in _channels.Snapshot())
+            if (channel.GuildId == guildId)
+                await RemoveChannelAsync(channel.Id, cancellationToken);
+
+        foreach (var member in _members.Snapshot())
+            if (member.GuildId == guildId)
+                await RemoveMemberAsync(guildId, member.User.Id, cancellationToken);
     }
 
     public ValueTask<DiscordMember?> GetMemberAsync(Snowflake guildId, Snowflake userId,

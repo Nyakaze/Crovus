@@ -727,14 +727,5 @@ public static class DiscordEventFactory
         };
     }
 
-    private static DiscordEmoji ReadEmoji(JsonElement data)
-    {
-        if (data.Property("emoji") is not { } emoji)
-            throw new JsonException("The reaction payload has no emoji.");
-
-        return new DiscordEmoji(
-            emoji.StringOrNull("name") ?? string.Empty,
-            emoji.SnowflakeOrNull("id"),
-            emoji.Flag("animated"));
-    }
+    private static DiscordEmoji ReadEmoji(JsonElement data) => data.RequireEmoji("emoji");
 }

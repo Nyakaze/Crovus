@@ -84,11 +84,7 @@ public sealed class InteractionResponseFactory
 
     public InteractionResponseFactory AddFile(DiscordFile file)
     {
-        ArgumentNullException.ThrowIfNull(file);
-        Limit.Count(_files.Count + 1, DiscordLimits.MessageFiles, nameof(file));
-        Limit.Text(file.Description, DiscordLimits.AttachmentDescription, nameof(file));
-
-        _files.Add(file);
+        FactoryParts.AddFile(_files, file);
 
         return this;
     }
@@ -102,10 +98,7 @@ public sealed class InteractionResponseFactory
 
     public InteractionResponseFactory AddFiles(IEnumerable<DiscordFile> files)
     {
-        ArgumentNullException.ThrowIfNull(files);
-
-        foreach (var file in files)
-            AddFile(file);
+        FactoryParts.AddFiles(_files, files);
 
         return this;
     }
@@ -114,10 +107,7 @@ public sealed class InteractionResponseFactory
     {
         AddFile(file);
 
-        var embed = EmbedFactory.Create().WithImage(file);
-        configure?.Invoke(embed);
-
-        return AddEmbed(embed.Build());
+        return AddEmbed(FactoryParts.ImageEmbed(file, configure));
     }
 
     public InteractionResponseFactory ClearFiles()
@@ -204,13 +194,7 @@ public sealed class InteractionResponseFactory
 
     public InteractionResponseFactory WithComponents(IEnumerable<DiscordComponent> components)
     {
-        ArgumentNullException.ThrowIfNull(components);
-
-        foreach (var component in components)
-            if (component is DiscordActionRow row)
-                Components().AddRow(row);
-            else
-                Components().AddRow(component);
+        FactoryParts.AddComponents(Components(), components);
 
         return this;
     }

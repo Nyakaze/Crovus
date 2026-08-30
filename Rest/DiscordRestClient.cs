@@ -87,51 +87,9 @@ public sealed class DiscordRestClient : IDiscordRest, IContextAware
         return await ReadAsync<DiscordMessage>(response, route, cancellationToken);
     }
 
-    public async IAsyncEnumerable<DiscordMessage> GetMessagesAsync(Snowflake channelId, Snowflake? before = null,
-        int? limit = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        if (limit is <= 0)
-            yield break;
-
-        var route = RouteKey.Get("/channels/{channel_id}/messages", channelId.ToString());
-        var remaining = limit;
-        var cursor = before;
-
-        while (remaining is null or > 0)
-        {
-            var pageSize = Math.Min(MaxMessagePageSize, remaining ?? MaxMessagePageSize);
-            var path = $"channels/{channelId}/messages?limit={pageSize}";
-
-            if (cursor is { } value)
-                path += $"&before={value}";
-
-            IReadOnlyList<DiscordMessage> page;
-
-            using (var response = await SendAsync(route, path, cancellationToken: cancellationToken))
-                page = await ReadAsync<List<DiscordMessage>>(response, route, cancellationToken);
-
-            if (page.Count == 0)
-                yield break;
-
-            foreach (var message in page)
-            {
-                yield return message;
-
-                if (remaining is not { } left)
-                    continue;
-
-                remaining = left - 1;
-
-                if (remaining == 0)
-                    yield break;
-            }
-
-            if (page.Count < pageSize)
-                yield break;
-
-            cursor = page[^1].Id;
-        }
-    }
+    public IAsyncEnumerable<DiscordMessage> GetMessagesAsync(Snowflake channelId, Snowflake? before = null,
+        int? limit = null, CancellationToken cancellationToken = default) =>
+        GetMessagesAsync(channelId, new MessageQuery { Before = before, Limit = limit }, cancellationToken);
 
     public async Task<DiscordMessage> CreateMessageAsync(Snowflake channelId, MessageCreateRequest request,
         CancellationToken cancellationToken = default)
@@ -293,6 +251,51 @@ public sealed class DiscordRestClient : IDiscordRest, IContextAware
 
         return await ReadAsync<DiscordMessage>(response, route, cancellationToken);
     }
+
+    public async Task<DiscordMessage> EditWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
+        MessageEditRequest request, Snowflake? threadId = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(webhook);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var token = RequireToken(webhook);
+
+        var route = RouteKey.Patch("/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}",
+            webhook.Id.ToString());
+        var path = $"webhooks/{webhook.Id}/{Uri.EscapeDataString(token)}/messages/{messageId}";
+
+        if (threadId is { } thread)
+            path += $"?thread_id={thread}";
+
+        var payload = MessageEditPayload.From(request);
+
+        using var response = await SendAsync(route, path,
+            Body(route, payload, request.Files, request.Components, nameof(request)),
+            authorize: false, cancellationToken: cancellationToken);
+
+        return await ReadAsync<DiscordMessage>(response, route, cancellationToken);
+    }
+
+    public async Task DeleteWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
+        Snowflake? threadId = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(webhook);
+
+        var token = RequireToken(webhook);
+
+        var route = RouteKey.Delete("/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}",
+            webhook.Id.ToString());
+        var path = $"webhooks/{webhook.Id}/{Uri.EscapeDataString(token)}/messages/{messageId}";
+
+        if (threadId is { } thread)
+            path += $"?thread_id={thread}";
+
+        using var response = await SendAsync(route, path, authorize: false, cancellationToken: cancellationToken);
+    }
+
+    private static string RequireToken(DiscordWebhook webhook) =>
+        webhook.Token ?? throw new InvalidOperationException(
+            $"Webhook {webhook.Id} has no token and cannot be executed.");
 
     public async Task<DiscordChannel> CreateChannelAsync(Snowflake guildId, ChannelCreateRequest request,
         string? reason = null, CancellationToken cancellationToken = default)
@@ -654,18 +657,12 @@ public sealed class DiscordRestClient : IDiscordRest, IContextAware
         CancellationToken cancellationToken = default)
     {
         var route = RouteKey.Get("/guilds/{guild_id}/members", guildId.ToString());
-        var parameters = new List<string>(2);
+        var parameters = new QueryString();
 
-        if (query?.Limit is { } limit)
-            parameters.Add($"limit={limit}");
+        parameters.Add("limit", query?.Limit);
+        parameters.Add("after", query?.After);
 
-        if (query?.After is { } after)
-            parameters.Add($"after={after}");
-
-        var path = $"guilds/{guildId}/members";
-
-        if (parameters.Count > 0)
-            path += $"?{string.Join('&', parameters)}";
+        var path = parameters.AppendTo($"guilds/{guildId}/members");
 
         using var response = await SendAsync(route, path, cancellationToken: cancellationToken);
 
@@ -731,21 +728,13 @@ public sealed class DiscordRestClient : IDiscordRest, IContextAware
         CancellationToken cancellationToken = default)
     {
         var route = RouteKey.Get("/guilds/{guild_id}/bans", guildId.ToString());
-        var parameters = new List<string>(3);
+        var parameters = new QueryString();
 
-        if (query?.Limit is { } limit)
-            parameters.Add($"limit={limit}");
+        parameters.Add("limit", query?.Limit);
+        parameters.Add("before", query?.Before);
+        parameters.Add("after", query?.After);
 
-        if (query?.Before is { } before)
-            parameters.Add($"before={before}");
-
-        if (query?.After is { } after)
-            parameters.Add($"after={after}");
-
-        var path = $"guilds/{guildId}/bans";
-
-        if (parameters.Count > 0)
-            path += $"?{string.Join('&', parameters)}";
+        var path = parameters.AppendTo($"guilds/{guildId}/bans");
 
         using var response = await SendAsync(route, path, cancellationToken: cancellationToken);
 
@@ -984,17 +973,13 @@ public sealed class DiscordRestClient : IDiscordRest, IContextAware
         var route = RouteKey.Get("/channels/{channel_id}/messages/{message_id}/reactions/{emoji}",
             channelId.ToString());
 
-        var path = $"channels/{channelId}/messages/{messageId}/reactions/{emoji.ToReactionPath()}";
-        var parameters = new List<string>(2);
+        var parameters = new QueryString();
 
-        if (query?.Limit is { } limit)
-            parameters.Add($"limit={limit}");
+        parameters.Add("limit", query?.Limit);
+        parameters.Add("after", query?.After);
 
-        if (query?.After is { } after)
-            parameters.Add($"after={after}");
-
-        if (parameters.Count > 0)
-            path += $"?{string.Join('&', parameters)}";
+        var path = parameters.AppendTo(
+            $"channels/{channelId}/messages/{messageId}/reactions/{emoji.ToReactionPath()}");
 
         using var response = await SendAsync(route, path, cancellationToken: cancellationToken);
 
@@ -1149,27 +1134,15 @@ public sealed class DiscordRestClient : IDiscordRest, IContextAware
         CancellationToken cancellationToken = default)
     {
         var route = RouteKey.Get("/guilds/{guild_id}/audit-logs", guildId.ToString());
-        var parameters = new List<string>(5);
+        var parameters = new QueryString();
 
-        if (query?.UserId is { } userId)
-            parameters.Add($"user_id={userId}");
+        parameters.Add("user_id", query?.UserId);
+        parameters.Add("action_type", (int?)query?.Action);
+        parameters.Add("before", query?.Before);
+        parameters.Add("after", query?.After);
+        parameters.Add("limit", query?.Limit);
 
-        if (query?.Action is { } action)
-            parameters.Add($"action_type={(int)action}");
-
-        if (query?.Before is { } before)
-            parameters.Add($"before={before}");
-
-        if (query?.After is { } after)
-            parameters.Add($"after={after}");
-
-        if (query?.Limit is { } limit)
-            parameters.Add($"limit={limit}");
-
-        var path = $"guilds/{guildId}/audit-logs";
-
-        if (parameters.Count > 0)
-            path += $"?{string.Join('&', parameters)}";
+        var path = parameters.AppendTo($"guilds/{guildId}/audit-logs");
 
         using var response = await SendAsync(route, path, cancellationToken: cancellationToken);
 
@@ -1342,20 +1315,17 @@ public sealed class DiscordRestClient : IDiscordRest, IContextAware
         ArchivedThreadQuery? query, CancellationToken cancellationToken)
     {
         var route = RouteKey.Get(template, channelId.ToString());
-        var parameters = new List<string>(2);
+        var parameters = new QueryString();
 
         if (query?.Before is { } before)
-            parameters.Add($"before={Uri.EscapeDataString(before.ToString("O"))}");
-        else if (query?.BeforeId is { } beforeId)
-            parameters.Add($"before={beforeId}");
+            parameters.AddEscaped("before", before.ToString("O"));
+        else
+            parameters.Add("before", query?.BeforeId);
 
-        if (query?.Limit is { } limit)
-            parameters.Add($"limit={limit}");
+        parameters.Add("limit", query?.Limit);
 
-        if (parameters.Count > 0)
-            path += $"?{string.Join('&', parameters)}";
-
-        using var response = await SendAsync(route, path, cancellationToken: cancellationToken);
+        using var response = await SendAsync(route, parameters.AppendTo(path),
+            cancellationToken: cancellationToken);
 
         return await ReadAsync<ThreadListing>(response, route, cancellationToken);
     }

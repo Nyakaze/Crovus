@@ -159,7 +159,10 @@ public sealed class DiscordMessageConverter : JsonConverter<DiscordMessage>
             element.DeserializeList<DiscordEmbed>("embeds", options),
             element.Deserialize<DiscordMessageReference>("message_reference", options))
         {
-            Components = MessageComponentConverter.ReadList(element.Property("components"), options)
+            Components = MessageComponentConverter.ReadList(element.Property("components"), options),
+            MentionsEveryone = element.Flag("mention_everyone"),
+            Mentions = element.DeserializeList<DiscordUser>("mentions", options),
+            ReplyTo = element.Deserialize<DiscordMessage>("referenced_message", options)
         };
     }
 

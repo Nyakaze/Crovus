@@ -1,8 +1,16 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Crovus.Cache;
 
 public interface ICacheStore<in TKey, TValue> where TKey : notnull
 {
     int Count { get; }
+
+    long Version { get; }
+
+    bool TryGet(TKey key, [MaybeNullWhen(false)] out TValue value);
+
+    IReadOnlyList<TValue> Snapshot();
 
     ValueTask<TValue?> GetAsync(TKey key, CancellationToken cancellationToken = default);
 

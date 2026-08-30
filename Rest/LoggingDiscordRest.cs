@@ -36,1800 +36,724 @@ public sealed class LoggingDiscordRest : IDiscordRest, IContextAware
         }
     }
 
-    public async Task<DiscordChannel> GetChannelAsync(Snowflake channelId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordChannel> GetChannelAsync(Snowflake channelId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetChannelAsync), LogLevel.Debug,
+            () => _inner.GetChannelAsync(channelId, cancellationToken),
+            _ => $"Fetched channel {channelId}",
+            () => $"channel {channelId}");
 
-        try
-        {
-            var channel = await _inner.GetChannelAsync(channelId, cancellationToken);
-            Succeeded(nameof(GetChannelAsync), start, LogLevel.Debug, $"Fetched channel {channelId}");
-            return channel;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetChannelAsync), start, exception, $"channel {channelId}");
-            throw;
-        }
-    }
+    public Task<DiscordMessage> GetMessageAsync(Snowflake channelId, Snowflake messageId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetMessageAsync), LogLevel.Debug,
+            () => _inner.GetMessageAsync(channelId, messageId, cancellationToken),
+            _ => $"Fetched message {messageId} from channel {channelId}",
+            () => $"message {messageId} in channel {channelId}");
 
-    public async Task<DiscordMessage> GetMessageAsync(Snowflake channelId, Snowflake messageId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public IAsyncEnumerable<DiscordMessage> GetMessagesAsync(Snowflake channelId, Snowflake? before = null,
+        int? limit = null, CancellationToken cancellationToken = default) =>
+        TrackMessagesAsync(_inner.GetMessagesAsync(channelId, before, limit, cancellationToken), channelId,
+            count => $"Read {count} messages from channel {channelId}", cancellationToken);
 
-        try
-        {
-            var message = await _inner.GetMessageAsync(channelId, messageId, cancellationToken);
-            Succeeded(nameof(GetMessageAsync), start, LogLevel.Debug,
-                $"Fetched message {messageId} from channel {channelId}");
-            return message;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetMessageAsync), start, exception, $"message {messageId} in channel {channelId}");
-            throw;
-        }
-    }
+    public Task<DiscordMessage> CreateMessageAsync(Snowflake channelId, MessageCreateRequest request,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(CreateMessageAsync), LogLevel.Information,
+            () => _inner.CreateMessageAsync(channelId, request, cancellationToken),
+            message =>
+                $"Created message {message.Id} in channel {channelId}{Uploaded(request.Files)}{Showing(request.Components)}",
+            () => $"channel {channelId}",
+            message => Emit(new MessageCreated(channelId.Value, message.Id.Value)));
 
-    public async IAsyncEnumerable<DiscordMessage> GetMessagesAsync(Snowflake channelId, Snowflake? before = null,
-        int? limit = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-        var count = 0;
+    public Task<DiscordMessage> EditMessageAsync(Snowflake channelId, Snowflake messageId,
+        MessageEditRequest request, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(EditMessageAsync), LogLevel.Information,
+            () => _inner.EditMessageAsync(channelId, messageId, request, cancellationToken),
+            _ =>
+                $"Edited message {messageId} in channel {channelId}{Uploaded(request.Files)}{Showing(request.Components)}",
+            () => $"message {messageId} in channel {channelId}",
+            _ => Emit(new MessageEdited(channelId.Value, messageId.Value)));
 
-        var messages = _inner
-            .GetMessagesAsync(channelId, before, limit, cancellationToken)
-            .GetAsyncEnumerator(cancellationToken);
+    public Task DeleteMessageAsync(Snowflake channelId, Snowflake messageId, string? reason = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteMessageAsync), LogLevel.Information,
+            () => _inner.DeleteMessageAsync(channelId, messageId, reason, cancellationToken),
+            () => $"Deleted message {messageId} in channel {channelId}{Because(reason)}",
+            () => $"message {messageId} in channel {channelId}",
+            () => Emit(new MessageDeleted(channelId.Value, messageId.Value, reason)));
 
-        try
-        {
-            while (true)
-            {
-                DiscordMessage message;
+    public Task CreateReactionAsync(Snowflake channelId, Snowflake messageId, DiscordEmoji emoji,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(CreateReactionAsync), LogLevel.Debug,
+            () => _inner.CreateReactionAsync(channelId, messageId, emoji, cancellationToken),
+            () => $"Added reaction {Describe(emoji)} to message {messageId} in channel {channelId}",
+            () => $"reaction {Describe(emoji)} on message {messageId}",
+            () => Emit(new ReactionAdded(channelId.Value, messageId.Value, Describe(emoji))));
 
-                try
-                {
-                    if (!await messages.MoveNextAsync())
-                        break;
+    public Task DeleteOwnReactionAsync(Snowflake channelId, Snowflake messageId, DiscordEmoji emoji,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteOwnReactionAsync), LogLevel.Debug,
+            () => _inner.DeleteOwnReactionAsync(channelId, messageId, emoji, cancellationToken),
+            () => $"Removed reaction {Describe(emoji)} from message {messageId} in channel {channelId}",
+            () => $"reaction {Describe(emoji)} on message {messageId}",
+            () => Emit(new ReactionRemoved(channelId.Value, messageId.Value, Describe(emoji))));
 
-                    message = messages.Current;
-                }
-                catch (Exception exception)
-                {
-                    Failed(nameof(GetMessagesAsync), start, exception, $"channel {channelId} after {count} messages");
-                    throw;
-                }
+    public Task<IReadOnlyList<DiscordWebhook>> GetChannelWebhooksAsync(Snowflake channelId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetChannelWebhooksAsync), LogLevel.Debug,
+            () => _inner.GetChannelWebhooksAsync(channelId, cancellationToken),
+            webhooks => $"Fetched {webhooks.Count} webhooks for channel {channelId}",
+            () => $"channel {channelId}");
 
-                count++;
-                yield return message;
-            }
-        }
-        finally
-        {
-            await messages.DisposeAsync();
-        }
+    public Task<DiscordWebhook> GetWebhookAsync(Snowflake webhookId, string? token = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetWebhookAsync), LogLevel.Debug,
+            () => _inner.GetWebhookAsync(webhookId, token, cancellationToken),
+            _ => $"Fetched webhook {webhookId}",
+            () => $"webhook {webhookId}");
 
-        Succeeded(nameof(GetMessagesAsync), start, LogLevel.Debug, $"Read {count} messages from channel {channelId}");
-    }
+    public Task<DiscordWebhook> CreateWebhookAsync(Snowflake channelId, WebhookCreateRequest request,
+        string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(CreateWebhookAsync), LogLevel.Information,
+            () => _inner.CreateWebhookAsync(channelId, request, reason, cancellationToken),
+            webhook =>
+                $"Created webhook {webhook.Id} named '{request.Name}' in channel {channelId}{Because(reason)}",
+            () => $"channel {channelId}",
+            webhook => Emit(new WebhookCreated(webhook.Id.Value, channelId.Value, request.Name)));
 
-    public async Task<DiscordMessage> CreateMessageAsync(Snowflake channelId, MessageCreateRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordWebhook> ModifyWebhookAsync(Snowflake webhookId, WebhookModifyRequest request,
+        string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(ModifyWebhookAsync), LogLevel.Information,
+            () => _inner.ModifyWebhookAsync(webhookId, request, reason, cancellationToken),
+            _ => $"Modified webhook {webhookId}{Because(reason)}",
+            () => $"webhook {webhookId}",
+            _ => Emit(new WebhookModified(webhookId.Value)));
 
-        try
-        {
-            var message = await _inner.CreateMessageAsync(channelId, request, cancellationToken);
-            Succeeded(nameof(CreateMessageAsync), start, LogLevel.Information,
-                $"Created message {message.Id} in channel {channelId}{Uploaded(request.Files)}{Showing(request.Components)}");
-            Emit(new MessageCreated(channelId.Value, message.Id.Value));
-            return message;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(CreateMessageAsync), start, exception, $"channel {channelId}");
-            throw;
-        }
-    }
+    public Task DeleteWebhookAsync(Snowflake webhookId, string? reason = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteWebhookAsync), LogLevel.Information,
+            () => _inner.DeleteWebhookAsync(webhookId, reason, cancellationToken),
+            () => $"Deleted webhook {webhookId}{Because(reason)}",
+            () => $"webhook {webhookId}",
+            () => Emit(new WebhookDeleted(webhookId.Value)));
 
-    public async Task<DiscordMessage> EditMessageAsync(Snowflake channelId, Snowflake messageId,
-        MessageEditRequest request, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var message = await _inner.EditMessageAsync(channelId, messageId, request, cancellationToken);
-            Succeeded(nameof(EditMessageAsync), start, LogLevel.Information,
-                $"Edited message {messageId} in channel {channelId}{Uploaded(request.Files)}{Showing(request.Components)}");
-            Emit(new MessageEdited(channelId.Value, messageId.Value));
-            return message;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(EditMessageAsync), start, exception, $"message {messageId} in channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task DeleteMessageAsync(Snowflake channelId, Snowflake messageId, string? reason = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.DeleteMessageAsync(channelId, messageId, reason, cancellationToken);
-            Succeeded(nameof(DeleteMessageAsync), start, LogLevel.Information,
-                $"Deleted message {messageId} in channel {channelId}{Because(reason)}");
-            Emit(new MessageDeleted(channelId.Value, messageId.Value, reason));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteMessageAsync), start, exception, $"message {messageId} in channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task CreateReactionAsync(Snowflake channelId, Snowflake messageId, DiscordEmoji emoji,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.CreateReactionAsync(channelId, messageId, emoji, cancellationToken);
-            Succeeded(nameof(CreateReactionAsync), start, LogLevel.Debug,
-                $"Added reaction {Describe(emoji)} to message {messageId} in channel {channelId}");
-            Emit(new ReactionAdded(channelId.Value, messageId.Value, Describe(emoji)));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(CreateReactionAsync), start, exception, $"reaction {Describe(emoji)} on message {messageId}");
-            throw;
-        }
-    }
-
-    public async Task DeleteOwnReactionAsync(Snowflake channelId, Snowflake messageId, DiscordEmoji emoji,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.DeleteOwnReactionAsync(channelId, messageId, emoji, cancellationToken);
-            Succeeded(nameof(DeleteOwnReactionAsync), start, LogLevel.Debug,
-                $"Removed reaction {Describe(emoji)} from message {messageId} in channel {channelId}");
-            Emit(new ReactionRemoved(channelId.Value, messageId.Value, Describe(emoji)));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteOwnReactionAsync), start, exception,
-                $"reaction {Describe(emoji)} on message {messageId}");
-            throw;
-        }
-    }
-
-    public async Task<IReadOnlyList<DiscordWebhook>> GetChannelWebhooksAsync(Snowflake channelId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var webhooks = await _inner.GetChannelWebhooksAsync(channelId, cancellationToken);
-            Succeeded(nameof(GetChannelWebhooksAsync), start, LogLevel.Debug,
-                $"Fetched {webhooks.Count} webhooks for channel {channelId}");
-            return webhooks;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetChannelWebhooksAsync), start, exception, $"channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordWebhook> GetWebhookAsync(Snowflake webhookId, string? token = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var webhook = await _inner.GetWebhookAsync(webhookId, token, cancellationToken);
-            Succeeded(nameof(GetWebhookAsync), start, LogLevel.Debug, $"Fetched webhook {webhookId}");
-            return webhook;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetWebhookAsync), start, exception, $"webhook {webhookId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordWebhook> CreateWebhookAsync(Snowflake channelId, WebhookCreateRequest request,
-        string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var webhook = await _inner.CreateWebhookAsync(channelId, request, reason, cancellationToken);
-            Succeeded(nameof(CreateWebhookAsync), start, LogLevel.Information,
-                $"Created webhook {webhook.Id} named '{request.Name}' in channel {channelId}{Because(reason)}");
-            Emit(new WebhookCreated(webhook.Id.Value, channelId.Value, request.Name));
-            return webhook;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(CreateWebhookAsync), start, exception, $"channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordWebhook> ModifyWebhookAsync(Snowflake webhookId, WebhookModifyRequest request,
-        string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var webhook = await _inner.ModifyWebhookAsync(webhookId, request, reason, cancellationToken);
-            Succeeded(nameof(ModifyWebhookAsync), start, LogLevel.Information,
-                $"Modified webhook {webhookId}{Because(reason)}");
-            Emit(new WebhookModified(webhookId.Value));
-            return webhook;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(ModifyWebhookAsync), start, exception, $"webhook {webhookId}");
-            throw;
-        }
-    }
-
-    public async Task DeleteWebhookAsync(Snowflake webhookId, string? reason = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.DeleteWebhookAsync(webhookId, reason, cancellationToken);
-            Succeeded(nameof(DeleteWebhookAsync), start, LogLevel.Information,
-                $"Deleted webhook {webhookId}{Because(reason)}");
-            Emit(new WebhookDeleted(webhookId.Value));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteWebhookAsync), start, exception, $"webhook {webhookId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordMessage?> ExecuteWebhookAsync(DiscordWebhook webhook, WebhookExecuteRequest request,
+    public Task<DiscordMessage?> ExecuteWebhookAsync(DiscordWebhook webhook, WebhookExecuteRequest request,
         Snowflake? threadId = null, bool wait = false, CancellationToken cancellationToken = default)
     {
-        var start = Stopwatch.GetTimestamp();
         var target = threadId is { } thread ? $"thread {thread}" : $"channel {webhook.ChannelId}";
 
-        try
-        {
-            var message = await _inner.ExecuteWebhookAsync(webhook, request, threadId, wait, cancellationToken);
-            Succeeded(nameof(ExecuteWebhookAsync), start, LogLevel.Information,
-                $"Executed webhook {webhook.Id} into {target}{(message is null ? string.Empty : $", message {message.Id}")}{Uploaded(request.Files)}{Showing(request.Components)}");
-            Emit(new WebhookExecuted(webhook.Id.Value, webhook.ChannelId.Value, threadId?.Value, wait));
-            return message;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(ExecuteWebhookAsync), start, exception, $"webhook {webhook.Id} into {target}");
-            throw;
-        }
+        return TrackAsync(nameof(ExecuteWebhookAsync), LogLevel.Information,
+            () => _inner.ExecuteWebhookAsync(webhook, request, threadId, wait, cancellationToken),
+            message =>
+                $"Executed webhook {webhook.Id} into {target}{(message is null ? string.Empty : $", message {message.Id}")}{Uploaded(request.Files)}{Showing(request.Components)}",
+            () => $"webhook {webhook.Id} into {target}",
+            _ => Emit(new WebhookExecuted(webhook.Id.Value, webhook.ChannelId.Value, threadId?.Value, wait)));
     }
 
-    public async Task<DiscordChannel> CreateChannelAsync(Snowflake guildId, ChannelCreateRequest request,
-        string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordMessage> EditWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
+        MessageEditRequest request, Snowflake? threadId = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(EditWebhookMessageAsync), LogLevel.Information,
+            () => _inner.EditWebhookMessageAsync(webhook, messageId, request, threadId, cancellationToken),
+            _ => $"Edited webhook message {messageId} of webhook {webhook.Id}",
+            () => $"webhook message {messageId} of webhook {webhook.Id}");
 
-        try
-        {
-            var channel = await _inner.CreateChannelAsync(guildId, request, reason, cancellationToken);
-            Succeeded(nameof(CreateChannelAsync), start, LogLevel.Information,
-                $"Created {channel.Type} channel {channel.Name} ({channel.Id}) in guild {guildId}{Because(reason)}");
-            Emit(new ChannelCreated(guildId, channel.Id, channel.Type.ToString(), channel.Name));
-            return channel;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(CreateChannelAsync), start, exception, $"guild {guildId}");
-            throw;
-        }
-    }
+    public Task DeleteWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
+        Snowflake? threadId = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteWebhookMessageAsync), LogLevel.Information,
+            () => _inner.DeleteWebhookMessageAsync(webhook, messageId, threadId, cancellationToken),
+            () => $"Deleted webhook message {messageId} of webhook {webhook.Id}",
+            () => $"webhook message {messageId} of webhook {webhook.Id}");
 
-    public async Task<DiscordChannel> ModifyChannelAsync(Snowflake channelId, ChannelModifyRequest request,
-        string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordChannel> CreateChannelAsync(Snowflake guildId, ChannelCreateRequest request,
+        string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(CreateChannelAsync), LogLevel.Information,
+            () => _inner.CreateChannelAsync(guildId, request, reason, cancellationToken),
+            channel =>
+                $"Created {channel.Type} channel {channel.Name} ({channel.Id}) in guild {guildId}{Because(reason)}",
+            () => $"guild {guildId}",
+            channel => Emit(new ChannelCreated(guildId, channel.Id, channel.Type.ToString(), channel.Name)));
 
-        try
-        {
-            var channel = await _inner.ModifyChannelAsync(channelId, request, reason, cancellationToken);
-            Succeeded(nameof(ModifyChannelAsync), start, LogLevel.Information,
-                $"Modified channel {channelId}{Because(reason)}");
-            Emit(new ChannelModified(channelId));
-            return channel;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(ModifyChannelAsync), start, exception, $"channel {channelId}");
-            throw;
-        }
-    }
+    public Task<DiscordChannel> ModifyChannelAsync(Snowflake channelId, ChannelModifyRequest request,
+        string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(ModifyChannelAsync), LogLevel.Information,
+            () => _inner.ModifyChannelAsync(channelId, request, reason, cancellationToken),
+            _ => $"Modified channel {channelId}{Because(reason)}",
+            () => $"channel {channelId}",
+            _ => Emit(new ChannelModified(channelId)));
 
-    public async Task DeleteChannelAsync(Snowflake channelId, string? reason = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task DeleteChannelAsync(Snowflake channelId, string? reason = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteChannelAsync), LogLevel.Information,
+            () => _inner.DeleteChannelAsync(channelId, reason, cancellationToken),
+            () => $"Deleted channel {channelId}{Because(reason)}",
+            () => $"channel {channelId}",
+            () => Emit(new ChannelDeleted(channelId, reason)));
 
-        try
-        {
-            await _inner.DeleteChannelAsync(channelId, reason, cancellationToken);
-            Succeeded(nameof(DeleteChannelAsync), start, LogLevel.Information,
-                $"Deleted channel {channelId}{Because(reason)}");
-            Emit(new ChannelDeleted(channelId, reason));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteChannelAsync), start, exception, $"channel {channelId}");
-            throw;
-        }
-    }
+    public Task<DiscordChannel> StartThreadAsync(Snowflake channelId, ThreadCreateRequest request,
+        string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(StartThreadAsync), LogLevel.Information,
+            () => _inner.StartThreadAsync(channelId, request, reason, cancellationToken),
+            thread => $"Started {thread.Type} thread {thread.Name} ({thread.Id}) in channel {channelId}" +
+                      $"{Uploaded(request.Message?.Files)}{Because(reason)}",
+            () => $"channel {channelId}",
+            thread => Emit(new ThreadCreated(channelId, thread.Id, thread.Type.ToString(), thread.Name)));
 
-    public async Task<DiscordChannel> StartThreadAsync(Snowflake channelId, ThreadCreateRequest request,
-        string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordChannel> StartThreadFromMessageAsync(Snowflake channelId, Snowflake messageId,
+        ThreadFromMessageRequest request, string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(StartThreadFromMessageAsync), LogLevel.Information,
+            () => _inner.StartThreadFromMessageAsync(channelId, messageId, request, reason, cancellationToken),
+            thread =>
+                $"Started thread {thread.Name} ({thread.Id}) from message {messageId} in channel {channelId}{Because(reason)}",
+            () => $"message {messageId} in channel {channelId}",
+            thread => Emit(new ThreadCreated(channelId, thread.Id, thread.Type.ToString(), thread.Name)));
 
-        try
-        {
-            var thread = await _inner.StartThreadAsync(channelId, request, reason, cancellationToken);
-            Succeeded(nameof(StartThreadAsync), start, LogLevel.Information,
-                $"Started {thread.Type} thread {thread.Name} ({thread.Id}) in channel {channelId}" +
-                $"{Uploaded(request.Message?.Files)}{Because(reason)}");
-            Emit(new ThreadCreated(channelId, thread.Id, thread.Type.ToString(), thread.Name));
-            return thread;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(StartThreadAsync), start, exception, $"channel {channelId}");
-            throw;
-        }
-    }
+    public Task<IReadOnlyList<DiscordGuildEmoji>> GetGuildEmojisAsync(Snowflake guildId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGuildEmojisAsync), LogLevel.Debug,
+            () => _inner.GetGuildEmojisAsync(guildId, cancellationToken),
+            emojis => $"Fetched {emojis.Count} emojis from guild {guildId}",
+            () => $"guild {guildId}");
 
-    public async Task<DiscordChannel> StartThreadFromMessageAsync(Snowflake channelId, Snowflake messageId,
-        ThreadFromMessageRequest request, string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordGuildEmoji> GetGuildEmojiAsync(Snowflake guildId, Snowflake emojiId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGuildEmojiAsync), LogLevel.Debug,
+            () => _inner.GetGuildEmojiAsync(guildId, emojiId, cancellationToken),
+            _ => $"Fetched emoji {emojiId} from guild {guildId}",
+            () => $"emoji {emojiId} in guild {guildId}");
 
-        try
-        {
-            var thread = await _inner.StartThreadFromMessageAsync(channelId, messageId, request, reason,
-                cancellationToken);
-            Succeeded(nameof(StartThreadFromMessageAsync), start, LogLevel.Information,
-                $"Started thread {thread.Name} ({thread.Id}) from message {messageId} in channel {channelId}{Because(reason)}");
-            Emit(new ThreadCreated(channelId, thread.Id, thread.Type.ToString(), thread.Name));
-            return thread;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(StartThreadFromMessageAsync), start, exception,
-                $"message {messageId} in channel {channelId}");
-            throw;
-        }
-    }
+    public Task<DiscordGuildEmoji> CreateGuildEmojiAsync(Snowflake guildId, EmojiCreateRequest request,
+        string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(CreateGuildEmojiAsync), LogLevel.Information,
+            () => _inner.CreateGuildEmojiAsync(guildId, request, reason, cancellationToken),
+            emoji => $"Created emoji {emoji.Name} ({emoji.Id}) in guild {guildId}{Because(reason)}",
+            () => $"guild {guildId}",
+            emoji => Emit(new EmojiCreated(guildId, emoji.Id, emoji.Name)));
 
-    public async Task<IReadOnlyList<DiscordGuildEmoji>> GetGuildEmojisAsync(Snowflake guildId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordGuildEmoji> ModifyGuildEmojiAsync(Snowflake guildId, Snowflake emojiId,
+        EmojiModifyRequest request, string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(ModifyGuildEmojiAsync), LogLevel.Information,
+            () => _inner.ModifyGuildEmojiAsync(guildId, emojiId, request, reason, cancellationToken),
+            _ => $"Modified emoji {emojiId} in guild {guildId}{Because(reason)}",
+            () => $"emoji {emojiId} in guild {guildId}",
+            _ => Emit(new EmojiModified(guildId, emojiId)));
 
-        try
-        {
-            var emojis = await _inner.GetGuildEmojisAsync(guildId, cancellationToken);
-            Succeeded(nameof(GetGuildEmojisAsync), start, LogLevel.Debug,
-                $"Fetched {emojis.Count} emojis from guild {guildId}");
-            return emojis;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGuildEmojisAsync), start, exception, $"guild {guildId}");
-            throw;
-        }
-    }
+    public Task DeleteGuildEmojiAsync(Snowflake guildId, Snowflake emojiId, string? reason = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteGuildEmojiAsync), LogLevel.Information,
+            () => _inner.DeleteGuildEmojiAsync(guildId, emojiId, reason, cancellationToken),
+            () => $"Deleted emoji {emojiId} from guild {guildId}{Because(reason)}",
+            () => $"emoji {emojiId} in guild {guildId}",
+            () => Emit(new EmojiDeleted(guildId, emojiId, reason)));
 
-    public async Task<DiscordGuildEmoji> GetGuildEmojiAsync(Snowflake guildId, Snowflake emojiId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<IReadOnlyList<DiscordApplicationCommand>> GetApplicationCommandsAsync(Snowflake applicationId,
+        Snowflake? guildId = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetApplicationCommandsAsync), LogLevel.Debug,
+            () => _inner.GetApplicationCommandsAsync(applicationId, guildId, cancellationToken),
+            commands => $"Fetched {commands.Count} commands for {Scope(applicationId, guildId)}",
+            () => Scope(applicationId, guildId));
 
-        try
-        {
-            var emoji = await _inner.GetGuildEmojiAsync(guildId, emojiId, cancellationToken);
-            Succeeded(nameof(GetGuildEmojiAsync), start, LogLevel.Debug,
-                $"Fetched emoji {emojiId} from guild {guildId}");
-            return emoji;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGuildEmojiAsync), start, exception, $"emoji {emojiId} in guild {guildId}");
-            throw;
-        }
-    }
+    public Task<DiscordApplicationCommand> CreateApplicationCommandAsync(Snowflake applicationId,
+        ApplicationCommandRequest request, Snowflake? guildId = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(CreateApplicationCommandAsync), LogLevel.Information,
+            () => _inner.CreateApplicationCommandAsync(applicationId, request, guildId, cancellationToken),
+            command => $"Registered command {command.Name} ({command.Id}) for {Scope(applicationId, guildId)}",
+            () => Scope(applicationId, guildId),
+            command => Emit(new ApplicationCommandCreated(applicationId, command.Id, command.Name, guildId?.Value)));
 
-    public async Task<DiscordGuildEmoji> CreateGuildEmojiAsync(Snowflake guildId, EmojiCreateRequest request,
-        string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var emoji = await _inner.CreateGuildEmojiAsync(guildId, request, reason, cancellationToken);
-            Succeeded(nameof(CreateGuildEmojiAsync), start, LogLevel.Information,
-                $"Created emoji {emoji.Name} ({emoji.Id}) in guild {guildId}{Because(reason)}");
-            Emit(new EmojiCreated(guildId, emoji.Id, emoji.Name));
-            return emoji;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(CreateGuildEmojiAsync), start, exception, $"guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordGuildEmoji> ModifyGuildEmojiAsync(Snowflake guildId, Snowflake emojiId,
-        EmojiModifyRequest request, string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var emoji = await _inner.ModifyGuildEmojiAsync(guildId, emojiId, request, reason, cancellationToken);
-            Succeeded(nameof(ModifyGuildEmojiAsync), start, LogLevel.Information,
-                $"Modified emoji {emojiId} in guild {guildId}{Because(reason)}");
-            Emit(new EmojiModified(guildId, emojiId));
-            return emoji;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(ModifyGuildEmojiAsync), start, exception, $"emoji {emojiId} in guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task DeleteGuildEmojiAsync(Snowflake guildId, Snowflake emojiId, string? reason = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.DeleteGuildEmojiAsync(guildId, emojiId, reason, cancellationToken);
-            Succeeded(nameof(DeleteGuildEmojiAsync), start, LogLevel.Information,
-                $"Deleted emoji {emojiId} from guild {guildId}{Because(reason)}");
-            Emit(new EmojiDeleted(guildId, emojiId, reason));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteGuildEmojiAsync), start, exception, $"emoji {emojiId} in guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task<IReadOnlyList<DiscordApplicationCommand>> GetApplicationCommandsAsync(Snowflake applicationId,
-        Snowflake? guildId = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var commands = await _inner.GetApplicationCommandsAsync(applicationId, guildId, cancellationToken);
-            Succeeded(nameof(GetApplicationCommandsAsync), start, LogLevel.Debug,
-                $"Fetched {commands.Count} commands for {Scope(applicationId, guildId)}");
-            return commands;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetApplicationCommandsAsync), start, exception, Scope(applicationId, guildId));
-            throw;
-        }
-    }
-
-    public async Task<DiscordApplicationCommand> CreateApplicationCommandAsync(Snowflake applicationId,
-        ApplicationCommandRequest request, Snowflake? guildId = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var command = await _inner.CreateApplicationCommandAsync(applicationId, request, guildId,
-                cancellationToken);
-            Succeeded(nameof(CreateApplicationCommandAsync), start, LogLevel.Information,
-                $"Registered command {command.Name} ({command.Id}) for {Scope(applicationId, guildId)}");
-            Emit(new ApplicationCommandCreated(applicationId, command.Id, command.Name, guildId?.Value));
-            return command;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(CreateApplicationCommandAsync), start, exception, Scope(applicationId, guildId));
-            throw;
-        }
-    }
-
-    public async Task<DiscordApplicationCommand> EditApplicationCommandAsync(Snowflake applicationId,
+    public Task<DiscordApplicationCommand> EditApplicationCommandAsync(Snowflake applicationId,
         Snowflake commandId, ApplicationCommandRequest request, Snowflake? guildId = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(EditApplicationCommandAsync), LogLevel.Information,
+            () => _inner.EditApplicationCommandAsync(applicationId, commandId, request, guildId, cancellationToken),
+            _ => $"Edited command {commandId} for {Scope(applicationId, guildId)}",
+            () => $"command {commandId} for {Scope(applicationId, guildId)}",
+            _ => Emit(new ApplicationCommandEdited(applicationId, commandId, guildId?.Value)));
 
-        try
-        {
-            var command = await _inner.EditApplicationCommandAsync(applicationId, commandId, request, guildId,
-                cancellationToken);
-            Succeeded(nameof(EditApplicationCommandAsync), start, LogLevel.Information,
-                $"Edited command {commandId} for {Scope(applicationId, guildId)}");
-            Emit(new ApplicationCommandEdited(applicationId, commandId, guildId?.Value));
-            return command;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(EditApplicationCommandAsync), start, exception,
-                $"command {commandId} for {Scope(applicationId, guildId)}");
-            throw;
-        }
-    }
+    public Task DeleteApplicationCommandAsync(Snowflake applicationId, Snowflake commandId,
+        Snowflake? guildId = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteApplicationCommandAsync), LogLevel.Information,
+            () => _inner.DeleteApplicationCommandAsync(applicationId, commandId, guildId, cancellationToken),
+            () => $"Deleted command {commandId} for {Scope(applicationId, guildId)}",
+            () => $"command {commandId} for {Scope(applicationId, guildId)}",
+            () => Emit(new ApplicationCommandDeleted(applicationId, commandId, guildId?.Value)));
 
-    public async Task DeleteApplicationCommandAsync(Snowflake applicationId, Snowflake commandId,
-        Snowflake? guildId = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.DeleteApplicationCommandAsync(applicationId, commandId, guildId, cancellationToken);
-            Succeeded(nameof(DeleteApplicationCommandAsync), start, LogLevel.Information,
-                $"Deleted command {commandId} for {Scope(applicationId, guildId)}");
-            Emit(new ApplicationCommandDeleted(applicationId, commandId, guildId?.Value));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteApplicationCommandAsync), start, exception,
-                $"command {commandId} for {Scope(applicationId, guildId)}");
-            throw;
-        }
-    }
-
-    public async Task<IReadOnlyList<DiscordApplicationCommand>> SetApplicationCommandsAsync(Snowflake applicationId,
+    public Task<IReadOnlyList<DiscordApplicationCommand>> SetApplicationCommandsAsync(Snowflake applicationId,
         IReadOnlyList<ApplicationCommandRequest> requests, Snowflake? guildId = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(SetApplicationCommandsAsync), LogLevel.Information,
+            () => _inner.SetApplicationCommandsAsync(applicationId, requests, guildId, cancellationToken),
+            commands => $"Overwrote {Scope(applicationId, guildId)} with {commands.Count} commands",
+            () => Scope(applicationId, guildId),
+            commands => Emit(new ApplicationCommandsOverwritten(applicationId, commands.Count, guildId?.Value)));
 
-        try
-        {
-            var commands = await _inner.SetApplicationCommandsAsync(applicationId, requests, guildId,
-                cancellationToken);
-            Succeeded(nameof(SetApplicationCommandsAsync), start, LogLevel.Information,
-                $"Overwrote {Scope(applicationId, guildId)} with {commands.Count} commands");
-            Emit(new ApplicationCommandsOverwritten(applicationId, commands.Count, guildId?.Value));
-            return commands;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(SetApplicationCommandsAsync), start, exception, Scope(applicationId, guildId));
-            throw;
-        }
-    }
+    public Task CreateInteractionResponseAsync(Snowflake interactionId, string interactionToken,
+        InteractionResponseRequest request, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(CreateInteractionResponseAsync), LogLevel.Debug,
+            () => _inner.CreateInteractionResponseAsync(interactionId, interactionToken, request, cancellationToken),
+            () =>
+                $"Answered interaction {interactionId} with {request.Type}{Uploaded(request.Message?.Files)}{Showing(request.Message?.Components)}",
+            () => $"interaction {interactionId}",
+            () => Emit(new InteractionResponded(interactionId, request.Type.ToString(),
+                request.Message?.EffectiveFlags.HasFlag(MessageFlags.Ephemeral) ?? false)));
 
-    public async Task CreateInteractionResponseAsync(Snowflake interactionId, string interactionToken,
-        InteractionResponseRequest request, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordMessage> GetOriginalInteractionResponseAsync(Snowflake applicationId,
+        string interactionToken, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetOriginalInteractionResponseAsync), LogLevel.Debug,
+            () => _inner.GetOriginalInteractionResponseAsync(applicationId, interactionToken, cancellationToken),
+            message => $"Fetched the original response {message.Id} of application {applicationId}",
+            () => $"application {applicationId}");
 
-        try
-        {
-            await _inner.CreateInteractionResponseAsync(interactionId, interactionToken, request, cancellationToken);
-            Succeeded(nameof(CreateInteractionResponseAsync), start, LogLevel.Debug,
-                $"Answered interaction {interactionId} with {request.Type}{Uploaded(request.Message?.Files)}{Showing(request.Message?.Components)}");
-            Emit(new InteractionResponded(interactionId, request.Type.ToString(),
-                request.Message?.EffectiveFlags.HasFlag(MessageFlags.Ephemeral) ?? false));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(CreateInteractionResponseAsync), start, exception, $"interaction {interactionId}");
-            throw;
-        }
-    }
+    public Task<DiscordMessage> EditOriginalInteractionResponseAsync(Snowflake applicationId,
+        string interactionToken, InteractionMessageRequest request, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(EditOriginalInteractionResponseAsync), LogLevel.Information,
+            () => _inner.EditOriginalInteractionResponseAsync(applicationId, interactionToken, request,
+                cancellationToken),
+            message =>
+                $"Edited the original response {message.Id} of application {applicationId}{Uploaded(request.Files)}{Showing(request.Components)}",
+            () => $"application {applicationId}",
+            message => Emit(new MessageEdited(message.ChannelId, message.Id)));
 
-    public async Task<DiscordMessage> GetOriginalInteractionResponseAsync(Snowflake applicationId,
-        string interactionToken, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task DeleteOriginalInteractionResponseAsync(Snowflake applicationId, string interactionToken,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteOriginalInteractionResponseAsync), LogLevel.Information,
+            () => _inner.DeleteOriginalInteractionResponseAsync(applicationId, interactionToken, cancellationToken),
+            () => $"Deleted the original response of application {applicationId}",
+            () => $"application {applicationId}");
 
-        try
-        {
-            var message = await _inner.GetOriginalInteractionResponseAsync(applicationId, interactionToken,
-                cancellationToken);
-            Succeeded(nameof(GetOriginalInteractionResponseAsync), start, LogLevel.Debug,
-                $"Fetched the original response {message.Id} of application {applicationId}");
-            return message;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetOriginalInteractionResponseAsync), start, exception, $"application {applicationId}");
-            throw;
-        }
-    }
+    public Task<DiscordMessage> CreateFollowupMessageAsync(Snowflake applicationId, string interactionToken,
+        InteractionMessageRequest request, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(CreateFollowupMessageAsync), LogLevel.Information,
+            () => _inner.CreateFollowupMessageAsync(applicationId, interactionToken, request, cancellationToken),
+            message =>
+                $"Sent follow-up {message.Id} for application {applicationId}{Uploaded(request.Files)}{Showing(request.Components)}",
+            () => $"application {applicationId}",
+            message => Emit(new InteractionFollowedUp(applicationId, message.Id,
+                request.EffectiveFlags.HasFlag(MessageFlags.Ephemeral))));
 
-    public async Task<DiscordMessage> EditOriginalInteractionResponseAsync(Snowflake applicationId,
-        string interactionToken, InteractionMessageRequest request, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordMessage> EditFollowupMessageAsync(Snowflake applicationId, string interactionToken,
+        Snowflake messageId, InteractionMessageRequest request, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(EditFollowupMessageAsync), LogLevel.Information,
+            () => _inner.EditFollowupMessageAsync(applicationId, interactionToken, messageId, request,
+                cancellationToken),
+            _ =>
+                $"Edited follow-up {messageId} of application {applicationId}{Uploaded(request.Files)}{Showing(request.Components)}",
+            () => $"follow-up {messageId} of application {applicationId}",
+            message => Emit(new MessageEdited(message.ChannelId, message.Id)));
 
-        try
-        {
-            var message = await _inner.EditOriginalInteractionResponseAsync(applicationId, interactionToken, request,
-                cancellationToken);
-            Succeeded(nameof(EditOriginalInteractionResponseAsync), start, LogLevel.Information,
-                $"Edited the original response {message.Id} of application {applicationId}{Uploaded(request.Files)}{Showing(request.Components)}");
-            Emit(new MessageEdited(message.ChannelId, message.Id));
-            return message;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(EditOriginalInteractionResponseAsync), start, exception, $"application {applicationId}");
-            throw;
-        }
-    }
+    public Task DeleteFollowupMessageAsync(Snowflake applicationId, string interactionToken,
+        Snowflake messageId, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteFollowupMessageAsync), LogLevel.Information,
+            () => _inner.DeleteFollowupMessageAsync(applicationId, interactionToken, messageId, cancellationToken),
+            () => $"Deleted follow-up {messageId} of application {applicationId}",
+            () => $"follow-up {messageId} of application {applicationId}");
 
-    public async Task DeleteOriginalInteractionResponseAsync(Snowflake applicationId, string interactionToken,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordGuild> GetGuildAsync(Snowflake guildId, bool withCounts = false,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGuildAsync), LogLevel.Debug,
+            () => _inner.GetGuildAsync(guildId, withCounts, cancellationToken),
+            _ => $"Fetched guild {guildId}",
+            () => $"guild {guildId}");
 
-        try
-        {
-            await _inner.DeleteOriginalInteractionResponseAsync(applicationId, interactionToken, cancellationToken);
-            Succeeded(nameof(DeleteOriginalInteractionResponseAsync), start, LogLevel.Information,
-                $"Deleted the original response of application {applicationId}");
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteOriginalInteractionResponseAsync), start, exception, $"application {applicationId}");
-            throw;
-        }
-    }
+    public Task<IReadOnlyList<DiscordChannel>> GetGuildChannelsAsync(Snowflake guildId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGuildChannelsAsync), LogLevel.Debug,
+            () => _inner.GetGuildChannelsAsync(guildId, cancellationToken),
+            channels => $"Fetched {channels.Count} channels of guild {guildId}",
+            () => $"channels of guild {guildId}");
 
-    public async Task<DiscordMessage> CreateFollowupMessageAsync(Snowflake applicationId, string interactionToken,
-        InteractionMessageRequest request, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordMember> GetGuildMemberAsync(Snowflake guildId, Snowflake userId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGuildMemberAsync), LogLevel.Debug,
+            () => _inner.GetGuildMemberAsync(guildId, userId, cancellationToken),
+            _ => $"Fetched member {userId} of guild {guildId}",
+            () => $"member {userId} of guild {guildId}");
 
-        try
-        {
-            var message = await _inner.CreateFollowupMessageAsync(applicationId, interactionToken, request,
-                cancellationToken);
-            Succeeded(nameof(CreateFollowupMessageAsync), start, LogLevel.Information,
-                $"Sent follow-up {message.Id} for application {applicationId}{Uploaded(request.Files)}{Showing(request.Components)}");
-            Emit(new InteractionFollowedUp(applicationId, message.Id,
-                request.EffectiveFlags.HasFlag(MessageFlags.Ephemeral)));
-            return message;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(CreateFollowupMessageAsync), start, exception, $"application {applicationId}");
-            throw;
-        }
-    }
+    public Task<IReadOnlyList<DiscordMember>> GetGuildMembersAsync(Snowflake guildId, MemberQuery? query = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGuildMembersAsync), LogLevel.Debug,
+            () => _inner.GetGuildMembersAsync(guildId, query, cancellationToken),
+            members => $"Fetched {members.Count} members of guild {guildId}",
+            () => $"members of guild {guildId}",
+            members => Emit(new MembersFetched(guildId, members.Count, query?.After?.Value)));
 
-    public async Task<DiscordMessage> EditFollowupMessageAsync(Snowflake applicationId, string interactionToken,
-        Snowflake messageId, InteractionMessageRequest request, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<IReadOnlyList<DiscordMember>> SearchGuildMembersAsync(Snowflake guildId, string search,
+        int limit = 1, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(SearchGuildMembersAsync), LogLevel.Debug,
+            () => _inner.SearchGuildMembersAsync(guildId, search, limit, cancellationToken),
+            members => $"Found {members.Count} members matching '{search}' in guild {guildId}",
+            () => $"member search '{search}' in guild {guildId}");
 
-        try
-        {
-            var message = await _inner.EditFollowupMessageAsync(applicationId, interactionToken, messageId, request,
-                cancellationToken);
-            Succeeded(nameof(EditFollowupMessageAsync), start, LogLevel.Information,
-                $"Edited follow-up {messageId} of application {applicationId}{Uploaded(request.Files)}{Showing(request.Components)}");
-            Emit(new MessageEdited(message.ChannelId, message.Id));
-            return message;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(EditFollowupMessageAsync), start, exception,
-                $"follow-up {messageId} of application {applicationId}");
-            throw;
-        }
-    }
+    public Task<DiscordMember> ModifyGuildMemberAsync(Snowflake guildId, Snowflake userId,
+        MemberModifyRequest request, string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(ModifyGuildMemberAsync), LogLevel.Information,
+            () => _inner.ModifyGuildMemberAsync(guildId, userId, request, reason, cancellationToken),
+            _ => $"Modified member {userId} of guild {guildId}{Because(reason)}",
+            () => $"member {userId} of guild {guildId}",
+            _ => Emit(new MemberModified(guildId, userId, Changes(request))));
 
-    public async Task DeleteFollowupMessageAsync(Snowflake applicationId, string interactionToken,
-        Snowflake messageId, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task AddGuildMemberRoleAsync(Snowflake guildId, Snowflake userId, Snowflake roleId,
+        string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(AddGuildMemberRoleAsync), LogLevel.Information,
+            () => _inner.AddGuildMemberRoleAsync(guildId, userId, roleId, reason, cancellationToken),
+            () => $"Granted role {roleId} to member {userId} of guild {guildId}{Because(reason)}",
+            () => $"role {roleId} for member {userId} of guild {guildId}",
+            () => Emit(new MemberRoleChanged(guildId, userId, roleId, true)));
 
-        try
-        {
-            await _inner.DeleteFollowupMessageAsync(applicationId, interactionToken, messageId, cancellationToken);
-            Succeeded(nameof(DeleteFollowupMessageAsync), start, LogLevel.Information,
-                $"Deleted follow-up {messageId} of application {applicationId}");
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteFollowupMessageAsync), start, exception,
-                $"follow-up {messageId} of application {applicationId}");
-            throw;
-        }
-    }
+    public Task RemoveGuildMemberRoleAsync(Snowflake guildId, Snowflake userId, Snowflake roleId,
+        string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(RemoveGuildMemberRoleAsync), LogLevel.Information,
+            () => _inner.RemoveGuildMemberRoleAsync(guildId, userId, roleId, reason, cancellationToken),
+            () => $"Revoked role {roleId} from member {userId} of guild {guildId}{Because(reason)}",
+            () => $"role {roleId} for member {userId} of guild {guildId}",
+            () => Emit(new MemberRoleChanged(guildId, userId, roleId, false)));
 
-    public async Task<DiscordGuild> GetGuildAsync(Snowflake guildId, bool withCounts = false,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task RemoveGuildMemberAsync(Snowflake guildId, Snowflake userId, string? reason = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(RemoveGuildMemberAsync), LogLevel.Warning,
+            () => _inner.RemoveGuildMemberAsync(guildId, userId, reason, cancellationToken),
+            () => $"Kicked member {userId} from guild {guildId}{Because(reason)}",
+            () => $"member {userId} of guild {guildId}",
+            () => Emit(new MemberKicked(guildId, userId, reason)));
 
-        try
-        {
-            var guild = await _inner.GetGuildAsync(guildId, withCounts, cancellationToken);
-            Succeeded(nameof(GetGuildAsync), start, LogLevel.Debug, $"Fetched guild {guildId}");
-            return guild;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGuildAsync), start, exception, $"guild {guildId}");
-            throw;
-        }
-    }
+    public Task<IReadOnlyList<DiscordBan>> GetGuildBansAsync(Snowflake guildId, BanQuery? query = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGuildBansAsync), LogLevel.Debug,
+            () => _inner.GetGuildBansAsync(guildId, query, cancellationToken),
+            bans => $"Fetched {bans.Count} bans of guild {guildId}",
+            () => $"bans of guild {guildId}");
 
-    public async Task<IReadOnlyList<DiscordChannel>> GetGuildChannelsAsync(Snowflake guildId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordBan?> GetGuildBanAsync(Snowflake guildId, Snowflake userId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGuildBanAsync), LogLevel.Debug,
+            () => _inner.GetGuildBanAsync(guildId, userId, cancellationToken),
+            ban => ban is null
+                ? $"User {userId} is not banned in guild {guildId}"
+                : $"Fetched the ban of {userId} in guild {guildId}",
+            () => $"ban of {userId} in guild {guildId}");
 
-        try
-        {
-            var channels = await _inner.GetGuildChannelsAsync(guildId, cancellationToken);
-            Succeeded(nameof(GetGuildChannelsAsync), start, LogLevel.Debug,
-                $"Fetched {channels.Count} channels of guild {guildId}");
-            return channels;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGuildChannelsAsync), start, exception, $"channels of guild {guildId}");
-            throw;
-        }
-    }
+    public Task CreateGuildBanAsync(Snowflake guildId, Snowflake userId, BanCreateRequest? request = null,
+        string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(CreateGuildBanAsync), LogLevel.Warning,
+            () => _inner.CreateGuildBanAsync(guildId, userId, request, reason, cancellationToken),
+            () => $"Banned {userId} from guild {guildId}{Because(reason)}",
+            () => $"ban of {userId} in guild {guildId}",
+            () => Emit(new MemberBanned(guildId, userId, request?.DeleteMessageSeconds ?? 0, reason)));
 
-    public async Task<DiscordMember> GetGuildMemberAsync(Snowflake guildId, Snowflake userId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task RemoveGuildBanAsync(Snowflake guildId, Snowflake userId, string? reason = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(RemoveGuildBanAsync), LogLevel.Information,
+            () => _inner.RemoveGuildBanAsync(guildId, userId, reason, cancellationToken),
+            () => $"Unbanned {userId} in guild {guildId}{Because(reason)}",
+            () => $"ban of {userId} in guild {guildId}",
+            () => Emit(new MemberUnbanned(guildId, userId, reason)));
 
-        try
-        {
-            var member = await _inner.GetGuildMemberAsync(guildId, userId, cancellationToken);
-            Succeeded(nameof(GetGuildMemberAsync), start, LogLevel.Debug,
-                $"Fetched member {userId} of guild {guildId}");
-            return member;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGuildMemberAsync), start, exception, $"member {userId} of guild {guildId}");
-            throw;
-        }
-    }
+    public Task<IReadOnlyList<DiscordRole>> GetGuildRolesAsync(Snowflake guildId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGuildRolesAsync), LogLevel.Debug,
+            () => _inner.GetGuildRolesAsync(guildId, cancellationToken),
+            roles => $"Fetched {roles.Count} roles of guild {guildId}",
+            () => $"roles of guild {guildId}");
 
-    public async Task<IReadOnlyList<DiscordMember>> GetGuildMembersAsync(Snowflake guildId, MemberQuery? query = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordRole> CreateGuildRoleAsync(Snowflake guildId, RoleCreateRequest request,
+        string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(CreateGuildRoleAsync), LogLevel.Information,
+            () => _inner.CreateGuildRoleAsync(guildId, request, reason, cancellationToken),
+            role => $"Created role {role.Name} ({role.Id}) in guild {guildId}{Because(reason)}",
+            () => $"role in guild {guildId}",
+            role => Emit(new RoleCreated(guildId, role.Id, role.Name, (ulong)role.Permissions)));
 
-        try
-        {
-            var members = await _inner.GetGuildMembersAsync(guildId, query, cancellationToken);
-            Succeeded(nameof(GetGuildMembersAsync), start, LogLevel.Debug,
-                $"Fetched {members.Count} members of guild {guildId}");
-            Emit(new MembersFetched(guildId, members.Count, query?.After?.Value));
-            return members;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGuildMembersAsync), start, exception, $"members of guild {guildId}");
-            throw;
-        }
-    }
+    public Task<DiscordRole> ModifyGuildRoleAsync(Snowflake guildId, Snowflake roleId,
+        RoleModifyRequest request, string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(ModifyGuildRoleAsync), LogLevel.Information,
+            () => _inner.ModifyGuildRoleAsync(guildId, roleId, request, reason, cancellationToken),
+            role => $"Modified role {role.Name} ({roleId}) in guild {guildId}{Because(reason)}",
+            () => $"role {roleId} in guild {guildId}",
+            role => Emit(new RoleModified(guildId, roleId, role.Name, (ulong)role.Permissions)));
 
-    public async Task<IReadOnlyList<DiscordMember>> SearchGuildMembersAsync(Snowflake guildId, string search,
-        int limit = 1, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task DeleteGuildRoleAsync(Snowflake guildId, Snowflake roleId, string? reason = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteGuildRoleAsync), LogLevel.Warning,
+            () => _inner.DeleteGuildRoleAsync(guildId, roleId, reason, cancellationToken),
+            () => $"Deleted role {roleId} in guild {guildId}{Because(reason)}",
+            () => $"role {roleId} in guild {guildId}",
+            () => Emit(new RoleDeleted(guildId, roleId, reason)));
 
-        try
-        {
-            var members = await _inner.SearchGuildMembersAsync(guildId, search, limit, cancellationToken);
-            Succeeded(nameof(SearchGuildMembersAsync), start, LogLevel.Debug,
-                $"Found {members.Count} members matching '{search}' in guild {guildId}");
-            return members;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(SearchGuildMembersAsync), start, exception,
-                $"member search '{search}' in guild {guildId}");
-            throw;
-        }
-    }
+    public IAsyncEnumerable<DiscordMessage> GetMessagesAsync(Snowflake channelId, MessageQuery query,
+        CancellationToken cancellationToken = default) =>
+        TrackMessagesAsync(_inner.GetMessagesAsync(channelId, query, cancellationToken), channelId,
+            count => $"Read {count} messages from channel {channelId} ({Describe(query)})", cancellationToken);
 
-    public async Task<DiscordMember> ModifyGuildMemberAsync(Snowflake guildId, Snowflake userId,
-        MemberModifyRequest request, string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task BulkDeleteMessagesAsync(Snowflake channelId, IReadOnlyList<Snowflake> messageIds,
+        string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(BulkDeleteMessagesAsync), LogLevel.Warning,
+            () => _inner.BulkDeleteMessagesAsync(channelId, messageIds, reason, cancellationToken),
+            () => $"Bulk deleted {messageIds.Count} messages in channel {channelId}{Because(reason)}",
+            () => $"{messageIds.Count} messages in channel {channelId}",
+            () => Emit(new MessagesBulkDeleted(channelId, messageIds.Count, reason)));
 
-        try
-        {
-            var member = await _inner.ModifyGuildMemberAsync(guildId, userId, request, reason, cancellationToken);
-            Succeeded(nameof(ModifyGuildMemberAsync), start, LogLevel.Information,
-                $"Modified member {userId} of guild {guildId}{Because(reason)}");
-            Emit(new MemberModified(guildId, userId, Changes(request)));
-            return member;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(ModifyGuildMemberAsync), start, exception, $"member {userId} of guild {guildId}");
-            throw;
-        }
-    }
+    public Task<DiscordMessage> CrosspostMessageAsync(Snowflake channelId, Snowflake messageId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(CrosspostMessageAsync), LogLevel.Information,
+            () => _inner.CrosspostMessageAsync(channelId, messageId, cancellationToken),
+            _ => $"Crossposted message {messageId} from channel {channelId}",
+            () => $"message {messageId} in channel {channelId}",
+            _ => Emit(new MessageCrossposted(channelId, messageId)));
 
-    public async Task AddGuildMemberRoleAsync(Snowflake guildId, Snowflake userId, Snowflake roleId,
+    public Task<IReadOnlyList<DiscordMessage>> GetPinnedMessagesAsync(Snowflake channelId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetPinnedMessagesAsync), LogLevel.Debug,
+            () => _inner.GetPinnedMessagesAsync(channelId, cancellationToken),
+            messages => $"Fetched {messages.Count} pinned messages from channel {channelId}",
+            () => $"pins in channel {channelId}");
+
+    public Task PinMessageAsync(Snowflake channelId, Snowflake messageId, string? reason = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(PinMessageAsync), LogLevel.Information,
+            () => _inner.PinMessageAsync(channelId, messageId, reason, cancellationToken),
+            () => $"Pinned message {messageId} in channel {channelId}{Because(reason)}",
+            () => $"message {messageId} in channel {channelId}",
+            () => Emit(new MessagePinned(channelId, messageId, reason)));
+
+    public Task UnpinMessageAsync(Snowflake channelId, Snowflake messageId, string? reason = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(UnpinMessageAsync), LogLevel.Information,
+            () => _inner.UnpinMessageAsync(channelId, messageId, reason, cancellationToken),
+            () => $"Unpinned message {messageId} in channel {channelId}{Because(reason)}",
+            () => $"message {messageId} in channel {channelId}",
+            () => Emit(new MessageUnpinned(channelId, messageId, reason)));
+
+    public Task TriggerTypingAsync(Snowflake channelId, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(TriggerTypingAsync), LogLevel.Trace,
+            () => _inner.TriggerTypingAsync(channelId, cancellationToken),
+            () => $"Triggered typing in channel {channelId}",
+            () => $"channel {channelId}",
+            () => Emit(new TypingTriggered(channelId)));
+
+    public Task<IReadOnlyList<DiscordUser>> GetReactionsAsync(Snowflake channelId, Snowflake messageId,
+        DiscordEmoji emoji, ReactionQuery? query = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetReactionsAsync), LogLevel.Debug,
+            () => _inner.GetReactionsAsync(channelId, messageId, emoji, query, cancellationToken),
+            users => $"Fetched {users.Count} reactors of {Describe(emoji)} on message {messageId}",
+            () => $"{Describe(emoji)} on message {messageId} in channel {channelId}");
+
+    public Task DeleteUserReactionAsync(Snowflake channelId, Snowflake messageId, DiscordEmoji emoji,
+        Snowflake userId, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteUserReactionAsync), LogLevel.Debug,
+            () => _inner.DeleteUserReactionAsync(channelId, messageId, emoji, userId, cancellationToken),
+            () => $"Removed {Describe(emoji)} by {userId} from message {messageId}",
+            () => $"{Describe(emoji)} by {userId} on message {messageId}",
+            () => Emit(new UserReactionRemoved(channelId, messageId, Describe(emoji), userId)));
+
+    public Task DeleteAllReactionsAsync(Snowflake channelId, Snowflake messageId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteAllReactionsAsync), LogLevel.Information,
+            () => _inner.DeleteAllReactionsAsync(channelId, messageId, cancellationToken),
+            () => $"Cleared all reactions on message {messageId} in channel {channelId}",
+            () => $"message {messageId} in channel {channelId}",
+            () => Emit(new ReactionsCleared(channelId, messageId, null)));
+
+    public Task DeleteEmojiReactionsAsync(Snowflake channelId, Snowflake messageId, DiscordEmoji emoji,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteEmojiReactionsAsync), LogLevel.Information,
+            () => _inner.DeleteEmojiReactionsAsync(channelId, messageId, emoji, cancellationToken),
+            () => $"Cleared {Describe(emoji)} reactions on message {messageId}",
+            () => $"{Describe(emoji)} on message {messageId} in channel {channelId}",
+            () => Emit(new ReactionsCleared(channelId, messageId, Describe(emoji))));
+
+    public Task<DiscordUser> GetCurrentUserAsync(CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetCurrentUserAsync), LogLevel.Debug,
+            () => _inner.GetCurrentUserAsync(cancellationToken),
+            user => $"Fetched current user {user.Username} ({user.Id})",
+            () => "current user");
+
+    public Task<DiscordUser> GetUserAsync(Snowflake userId, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetUserAsync), LogLevel.Debug,
+            () => _inner.GetUserAsync(userId, cancellationToken),
+            user => $"Fetched user {user.Username} ({userId})",
+            () => $"user {userId}");
+
+    public Task<DiscordChannel> CreateDirectMessageChannelAsync(Snowflake userId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(CreateDirectMessageChannelAsync), LogLevel.Information,
+            () => _inner.CreateDirectMessageChannelAsync(userId, cancellationToken),
+            channel => $"Opened direct channel {channel.Id} with user {userId}",
+            () => $"user {userId}",
+            channel => Emit(new DirectChannelOpened(userId, channel.Id)));
+
+    public Task LeaveGuildAsync(Snowflake guildId, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(LeaveGuildAsync), LogLevel.Warning,
+            () => _inner.LeaveGuildAsync(guildId, cancellationToken),
+            () => $"Left guild {guildId}",
+            () => $"guild {guildId}",
+            () => Emit(new GuildLeft(guildId)));
+
+    public Task<GatewayBotInfo> GetGatewayBotAsync(CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGatewayBotAsync), LogLevel.Information,
+            () => _inner.GetGatewayBotAsync(cancellationToken),
+            info => $"Gateway {info.Url} recommends {info.Shards} shards, " +
+                    $"{info.SessionStartLimit.Remaining}/{info.SessionStartLimit.Total} sessions left",
+            () => "gateway bot info");
+
+    public Task<IReadOnlyList<DiscordInvite>> GetChannelInvitesAsync(Snowflake channelId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetChannelInvitesAsync), LogLevel.Debug,
+            () => _inner.GetChannelInvitesAsync(channelId, cancellationToken),
+            invites => $"Fetched {invites.Count} invites for channel {channelId}",
+            () => $"channel {channelId}");
+
+    public Task<IReadOnlyList<DiscordInvite>> GetGuildInvitesAsync(Snowflake guildId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGuildInvitesAsync), LogLevel.Debug,
+            () => _inner.GetGuildInvitesAsync(guildId, cancellationToken),
+            invites => $"Fetched {invites.Count} invites for guild {guildId}",
+            () => $"guild {guildId}");
+
+    public Task<DiscordInvite> CreateChannelInviteAsync(Snowflake channelId,
+        InviteCreateRequest? request = null, string? reason = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(CreateChannelInviteAsync), LogLevel.Information,
+            () => _inner.CreateChannelInviteAsync(channelId, request, reason, cancellationToken),
+            invite => $"Created invite {invite.Code} for channel {channelId}{Because(reason)}",
+            () => $"channel {channelId}",
+            invite => Emit(new InviteIssued(channelId, invite.Code, invite.MaxUses, invite.MaxAge)));
+
+    public Task<DiscordInvite> GetInviteAsync(string code, bool withCounts = false,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetInviteAsync), LogLevel.Debug,
+            () => _inner.GetInviteAsync(code, withCounts, cancellationToken),
+            _ => $"Fetched invite {code}",
+            () => $"invite {code}");
+
+    public Task DeleteInviteAsync(string code, string? reason = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(DeleteInviteAsync), LogLevel.Warning,
+            () => _inner.DeleteInviteAsync(code, reason, cancellationToken),
+            () => $"Deleted invite {code}{Because(reason)}",
+            () => $"invite {code}",
+            () => Emit(new InviteRevoked(code, reason)));
+
+    public Task<DiscordAuditLog> GetGuildAuditLogAsync(Snowflake guildId, AuditLogQuery? query = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGuildAuditLogAsync), LogLevel.Debug,
+            () => _inner.GetGuildAuditLogAsync(guildId, query, cancellationToken),
+            log => $"Fetched {log.Entries.Count} audit log entries for guild {guildId}",
+            () => $"guild {guildId}");
+
+    public Task<DiscordGuild> ModifyGuildAsync(Snowflake guildId, GuildModifyRequest request,
+        string? reason = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(ModifyGuildAsync), LogLevel.Information,
+            () => _inner.ModifyGuildAsync(guildId, request, reason, cancellationToken),
+            guild => $"Modified guild {guild.Name} ({guildId}){Because(reason)}",
+            () => $"guild {guildId}",
+            _ => Emit(new GuildModified(guildId, Changes(request), reason)));
+
+    public Task<int> GetGuildPruneCountAsync(Snowflake guildId, PruneRequest? request = null,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGuildPruneCountAsync), LogLevel.Debug,
+            () => _inner.GetGuildPruneCountAsync(guildId, request, cancellationToken),
+            count => $"Prune of guild {guildId} would remove {count} members",
+            () => $"guild {guildId}");
+
+    public Task<int?> BeginGuildPruneAsync(Snowflake guildId, PruneRequest? request = null,
         string? reason = null, CancellationToken cancellationToken = default)
     {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.AddGuildMemberRoleAsync(guildId, userId, roleId, reason, cancellationToken);
-            Succeeded(nameof(AddGuildMemberRoleAsync), start, LogLevel.Information,
-                $"Granted role {roleId} to member {userId} of guild {guildId}{Because(reason)}");
-            Emit(new MemberRoleChanged(guildId, userId, roleId, true));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(AddGuildMemberRoleAsync), start, exception,
-                $"role {roleId} for member {userId} of guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task RemoveGuildMemberRoleAsync(Snowflake guildId, Snowflake userId, Snowflake roleId,
-        string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.RemoveGuildMemberRoleAsync(guildId, userId, roleId, reason, cancellationToken);
-            Succeeded(nameof(RemoveGuildMemberRoleAsync), start, LogLevel.Information,
-                $"Revoked role {roleId} from member {userId} of guild {guildId}{Because(reason)}");
-            Emit(new MemberRoleChanged(guildId, userId, roleId, false));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(RemoveGuildMemberRoleAsync), start, exception,
-                $"role {roleId} for member {userId} of guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task RemoveGuildMemberAsync(Snowflake guildId, Snowflake userId, string? reason = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.RemoveGuildMemberAsync(guildId, userId, reason, cancellationToken);
-            Succeeded(nameof(RemoveGuildMemberAsync), start, LogLevel.Warning,
-                $"Kicked member {userId} from guild {guildId}{Because(reason)}");
-            Emit(new MemberKicked(guildId, userId, reason));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(RemoveGuildMemberAsync), start, exception, $"member {userId} of guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task<IReadOnlyList<DiscordBan>> GetGuildBansAsync(Snowflake guildId, BanQuery? query = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var bans = await _inner.GetGuildBansAsync(guildId, query, cancellationToken);
-            Succeeded(nameof(GetGuildBansAsync), start, LogLevel.Debug,
-                $"Fetched {bans.Count} bans of guild {guildId}");
-            return bans;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGuildBansAsync), start, exception, $"bans of guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordBan?> GetGuildBanAsync(Snowflake guildId, Snowflake userId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var ban = await _inner.GetGuildBanAsync(guildId, userId, cancellationToken);
-            Succeeded(nameof(GetGuildBanAsync), start, LogLevel.Debug,
-                ban is null
-                    ? $"User {userId} is not banned in guild {guildId}"
-                    : $"Fetched the ban of {userId} in guild {guildId}");
-            return ban;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGuildBanAsync), start, exception, $"ban of {userId} in guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task CreateGuildBanAsync(Snowflake guildId, Snowflake userId, BanCreateRequest? request = null,
-        string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.CreateGuildBanAsync(guildId, userId, request, reason, cancellationToken);
-            Succeeded(nameof(CreateGuildBanAsync), start, LogLevel.Warning,
-                $"Banned {userId} from guild {guildId}{Because(reason)}");
-            Emit(new MemberBanned(guildId, userId, request?.DeleteMessageSeconds ?? 0, reason));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(CreateGuildBanAsync), start, exception, $"ban of {userId} in guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task RemoveGuildBanAsync(Snowflake guildId, Snowflake userId, string? reason = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.RemoveGuildBanAsync(guildId, userId, reason, cancellationToken);
-            Succeeded(nameof(RemoveGuildBanAsync), start, LogLevel.Information,
-                $"Unbanned {userId} in guild {guildId}{Because(reason)}");
-            Emit(new MemberUnbanned(guildId, userId, reason));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(RemoveGuildBanAsync), start, exception, $"ban of {userId} in guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task<IReadOnlyList<DiscordRole>> GetGuildRolesAsync(Snowflake guildId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var roles = await _inner.GetGuildRolesAsync(guildId, cancellationToken);
-            Succeeded(nameof(GetGuildRolesAsync), start, LogLevel.Debug,
-                $"Fetched {roles.Count} roles of guild {guildId}");
-            return roles;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGuildRolesAsync), start, exception, $"roles of guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordRole> CreateGuildRoleAsync(Snowflake guildId, RoleCreateRequest request,
-        string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var role = await _inner.CreateGuildRoleAsync(guildId, request, reason, cancellationToken);
-            Succeeded(nameof(CreateGuildRoleAsync), start, LogLevel.Information,
-                $"Created role {role.Name} ({role.Id}) in guild {guildId}{Because(reason)}");
-            Emit(new RoleCreated(guildId, role.Id, role.Name, (ulong)role.Permissions));
-            return role;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(CreateGuildRoleAsync), start, exception, $"role in guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordRole> ModifyGuildRoleAsync(Snowflake guildId, Snowflake roleId,
-        RoleModifyRequest request, string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var role = await _inner.ModifyGuildRoleAsync(guildId, roleId, request, reason, cancellationToken);
-            Succeeded(nameof(ModifyGuildRoleAsync), start, LogLevel.Information,
-                $"Modified role {role.Name} ({roleId}) in guild {guildId}{Because(reason)}");
-            Emit(new RoleModified(guildId, roleId, role.Name, (ulong)role.Permissions));
-            return role;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(ModifyGuildRoleAsync), start, exception, $"role {roleId} in guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task DeleteGuildRoleAsync(Snowflake guildId, Snowflake roleId, string? reason = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.DeleteGuildRoleAsync(guildId, roleId, reason, cancellationToken);
-            Succeeded(nameof(DeleteGuildRoleAsync), start, LogLevel.Warning,
-                $"Deleted role {roleId} in guild {guildId}{Because(reason)}");
-            Emit(new RoleDeleted(guildId, roleId, reason));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteGuildRoleAsync), start, exception, $"role {roleId} in guild {guildId}");
-            throw;
-        }
-    }
-
-    public async IAsyncEnumerable<DiscordMessage> GetMessagesAsync(Snowflake channelId, MessageQuery query,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-        var count = 0;
-
-        var messages = _inner
-            .GetMessagesAsync(channelId, query, cancellationToken)
-            .GetAsyncEnumerator(cancellationToken);
-
-        try
-        {
-            while (true)
-            {
-                DiscordMessage message;
-
-                try
-                {
-                    if (!await messages.MoveNextAsync())
-                        break;
-
-                    message = messages.Current;
-                }
-                catch (Exception exception)
-                {
-                    Failed(nameof(GetMessagesAsync), start, exception, $"channel {channelId} after {count} messages");
-                    throw;
-                }
-
-                count++;
-                yield return message;
-            }
-        }
-        finally
-        {
-            await messages.DisposeAsync();
-        }
-
-        Succeeded(nameof(GetMessagesAsync), start, LogLevel.Debug,
-            $"Read {count} messages from channel {channelId} ({Describe(query)})");
-    }
-
-    public async Task BulkDeleteMessagesAsync(Snowflake channelId, IReadOnlyList<Snowflake> messageIds,
-        string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.BulkDeleteMessagesAsync(channelId, messageIds, reason, cancellationToken);
-            Succeeded(nameof(BulkDeleteMessagesAsync), start, LogLevel.Warning,
-                $"Bulk deleted {messageIds.Count} messages in channel {channelId}{Because(reason)}");
-            Emit(new MessagesBulkDeleted(channelId, messageIds.Count, reason));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(BulkDeleteMessagesAsync), start, exception,
-                $"{messageIds.Count} messages in channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordMessage> CrosspostMessageAsync(Snowflake channelId, Snowflake messageId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var message = await _inner.CrosspostMessageAsync(channelId, messageId, cancellationToken);
-            Succeeded(nameof(CrosspostMessageAsync), start, LogLevel.Information,
-                $"Crossposted message {messageId} from channel {channelId}");
-            Emit(new MessageCrossposted(channelId, messageId));
-            return message;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(CrosspostMessageAsync), start, exception, $"message {messageId} in channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task<IReadOnlyList<DiscordMessage>> GetPinnedMessagesAsync(Snowflake channelId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var messages = await _inner.GetPinnedMessagesAsync(channelId, cancellationToken);
-            Succeeded(nameof(GetPinnedMessagesAsync), start, LogLevel.Debug,
-                $"Fetched {messages.Count} pinned messages from channel {channelId}");
-            return messages;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetPinnedMessagesAsync), start, exception, $"pins in channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task PinMessageAsync(Snowflake channelId, Snowflake messageId, string? reason = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.PinMessageAsync(channelId, messageId, reason, cancellationToken);
-            Succeeded(nameof(PinMessageAsync), start, LogLevel.Information,
-                $"Pinned message {messageId} in channel {channelId}{Because(reason)}");
-            Emit(new MessagePinned(channelId, messageId, reason));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(PinMessageAsync), start, exception, $"message {messageId} in channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task UnpinMessageAsync(Snowflake channelId, Snowflake messageId, string? reason = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.UnpinMessageAsync(channelId, messageId, reason, cancellationToken);
-            Succeeded(nameof(UnpinMessageAsync), start, LogLevel.Information,
-                $"Unpinned message {messageId} in channel {channelId}{Because(reason)}");
-            Emit(new MessageUnpinned(channelId, messageId, reason));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(UnpinMessageAsync), start, exception, $"message {messageId} in channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task TriggerTypingAsync(Snowflake channelId, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.TriggerTypingAsync(channelId, cancellationToken);
-            Succeeded(nameof(TriggerTypingAsync), start, LogLevel.Trace, $"Triggered typing in channel {channelId}");
-            Emit(new TypingTriggered(channelId));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(TriggerTypingAsync), start, exception, $"channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task<IReadOnlyList<DiscordUser>> GetReactionsAsync(Snowflake channelId, Snowflake messageId,
-        DiscordEmoji emoji, ReactionQuery? query = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var users = await _inner.GetReactionsAsync(channelId, messageId, emoji, query, cancellationToken);
-            Succeeded(nameof(GetReactionsAsync), start, LogLevel.Debug,
-                $"Fetched {users.Count} reactors of {Describe(emoji)} on message {messageId}");
-            return users;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetReactionsAsync), start, exception,
-                $"{Describe(emoji)} on message {messageId} in channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task DeleteUserReactionAsync(Snowflake channelId, Snowflake messageId, DiscordEmoji emoji,
-        Snowflake userId, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.DeleteUserReactionAsync(channelId, messageId, emoji, userId, cancellationToken);
-            Succeeded(nameof(DeleteUserReactionAsync), start, LogLevel.Debug,
-                $"Removed {Describe(emoji)} by {userId} from message {messageId}");
-            Emit(new UserReactionRemoved(channelId, messageId, Describe(emoji), userId));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteUserReactionAsync), start, exception,
-                $"{Describe(emoji)} by {userId} on message {messageId}");
-            throw;
-        }
-    }
-
-    public async Task DeleteAllReactionsAsync(Snowflake channelId, Snowflake messageId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.DeleteAllReactionsAsync(channelId, messageId, cancellationToken);
-            Succeeded(nameof(DeleteAllReactionsAsync), start, LogLevel.Information,
-                $"Cleared all reactions on message {messageId} in channel {channelId}");
-            Emit(new ReactionsCleared(channelId, messageId, null));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteAllReactionsAsync), start, exception, $"message {messageId} in channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task DeleteEmojiReactionsAsync(Snowflake channelId, Snowflake messageId, DiscordEmoji emoji,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.DeleteEmojiReactionsAsync(channelId, messageId, emoji, cancellationToken);
-            Succeeded(nameof(DeleteEmojiReactionsAsync), start, LogLevel.Information,
-                $"Cleared {Describe(emoji)} reactions on message {messageId}");
-            Emit(new ReactionsCleared(channelId, messageId, Describe(emoji)));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteEmojiReactionsAsync), start, exception,
-                $"{Describe(emoji)} on message {messageId} in channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordUser> GetCurrentUserAsync(CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var user = await _inner.GetCurrentUserAsync(cancellationToken);
-            Succeeded(nameof(GetCurrentUserAsync), start, LogLevel.Debug,
-                $"Fetched current user {user.Username} ({user.Id})");
-            return user;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetCurrentUserAsync), start, exception, "current user");
-            throw;
-        }
-    }
-
-    public async Task<DiscordUser> GetUserAsync(Snowflake userId, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var user = await _inner.GetUserAsync(userId, cancellationToken);
-            Succeeded(nameof(GetUserAsync), start, LogLevel.Debug, $"Fetched user {user.Username} ({userId})");
-            return user;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetUserAsync), start, exception, $"user {userId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordChannel> CreateDirectMessageChannelAsync(Snowflake userId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var channel = await _inner.CreateDirectMessageChannelAsync(userId, cancellationToken);
-            Succeeded(nameof(CreateDirectMessageChannelAsync), start, LogLevel.Information,
-                $"Opened direct channel {channel.Id} with user {userId}");
-            Emit(new DirectChannelOpened(userId, channel.Id));
-            return channel;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(CreateDirectMessageChannelAsync), start, exception, $"user {userId}");
-            throw;
-        }
-    }
-
-    public async Task LeaveGuildAsync(Snowflake guildId, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.LeaveGuildAsync(guildId, cancellationToken);
-            Succeeded(nameof(LeaveGuildAsync), start, LogLevel.Warning, $"Left guild {guildId}");
-            Emit(new GuildLeft(guildId));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(LeaveGuildAsync), start, exception, $"guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task<GatewayBotInfo> GetGatewayBotAsync(CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var info = await _inner.GetGatewayBotAsync(cancellationToken);
-            Succeeded(nameof(GetGatewayBotAsync), start, LogLevel.Information,
-                $"Gateway {info.Url} recommends {info.Shards} shards, " +
-                $"{info.SessionStartLimit.Remaining}/{info.SessionStartLimit.Total} sessions left");
-            return info;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGatewayBotAsync), start, exception, "gateway bot info");
-            throw;
-        }
-    }
-
-    public async Task<IReadOnlyList<DiscordInvite>> GetChannelInvitesAsync(Snowflake channelId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var invites = await _inner.GetChannelInvitesAsync(channelId, cancellationToken);
-            Succeeded(nameof(GetChannelInvitesAsync), start, LogLevel.Debug,
-                $"Fetched {invites.Count} invites for channel {channelId}");
-            return invites;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetChannelInvitesAsync), start, exception, $"channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task<IReadOnlyList<DiscordInvite>> GetGuildInvitesAsync(Snowflake guildId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var invites = await _inner.GetGuildInvitesAsync(guildId, cancellationToken);
-            Succeeded(nameof(GetGuildInvitesAsync), start, LogLevel.Debug,
-                $"Fetched {invites.Count} invites for guild {guildId}");
-            return invites;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGuildInvitesAsync), start, exception, $"guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordInvite> CreateChannelInviteAsync(Snowflake channelId,
-        InviteCreateRequest? request = null, string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var invite = await _inner.CreateChannelInviteAsync(channelId, request, reason, cancellationToken);
-            Succeeded(nameof(CreateChannelInviteAsync), start, LogLevel.Information,
-                $"Created invite {invite.Code} for channel {channelId}{Because(reason)}");
-            Emit(new InviteIssued(channelId, invite.Code, invite.MaxUses, invite.MaxAge));
-            return invite;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(CreateChannelInviteAsync), start, exception, $"channel {channelId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordInvite> GetInviteAsync(string code, bool withCounts = false,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var invite = await _inner.GetInviteAsync(code, withCounts, cancellationToken);
-            Succeeded(nameof(GetInviteAsync), start, LogLevel.Debug, $"Fetched invite {code}");
-            return invite;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetInviteAsync), start, exception, $"invite {code}");
-            throw;
-        }
-    }
-
-    public async Task DeleteInviteAsync(string code, string? reason = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.DeleteInviteAsync(code, reason, cancellationToken);
-            Succeeded(nameof(DeleteInviteAsync), start, LogLevel.Warning, $"Deleted invite {code}{Because(reason)}");
-            Emit(new InviteRevoked(code, reason));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteInviteAsync), start, exception, $"invite {code}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordAuditLog> GetGuildAuditLogAsync(Snowflake guildId, AuditLogQuery? query = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var log = await _inner.GetGuildAuditLogAsync(guildId, query, cancellationToken);
-            Succeeded(nameof(GetGuildAuditLogAsync), start, LogLevel.Debug,
-                $"Fetched {log.Entries.Count} audit log entries for guild {guildId}");
-            return log;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGuildAuditLogAsync), start, exception, $"guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordGuild> ModifyGuildAsync(Snowflake guildId, GuildModifyRequest request,
-        string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var guild = await _inner.ModifyGuildAsync(guildId, request, reason, cancellationToken);
-            Succeeded(nameof(ModifyGuildAsync), start, LogLevel.Information,
-                $"Modified guild {guild.Name} ({guildId}){Because(reason)}");
-            Emit(new GuildModified(guildId, Changes(request), reason));
-            return guild;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(ModifyGuildAsync), start, exception, $"guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task<int> GetGuildPruneCountAsync(Snowflake guildId, PruneRequest? request = null,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var count = await _inner.GetGuildPruneCountAsync(guildId, request, cancellationToken);
-            Succeeded(nameof(GetGuildPruneCountAsync), start, LogLevel.Debug,
-                $"Prune of guild {guildId} would remove {count} members");
-            return count;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGuildPruneCountAsync), start, exception, $"guild {guildId}");
-            throw;
-        }
-    }
-
-    public async Task<int?> BeginGuildPruneAsync(Snowflake guildId, PruneRequest? request = null,
-        string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
         var days = (request ?? new PruneRequest()).Days;
 
-        try
-        {
-            var removed = await _inner.BeginGuildPruneAsync(guildId, request, reason, cancellationToken);
-            Succeeded(nameof(BeginGuildPruneAsync), start, LogLevel.Warning,
-                $"Pruned {Report(removed)} members inactive for {days} days from guild {guildId}{Because(reason)}");
-            Emit(new GuildPruned(guildId, days, removed, reason));
-            return removed;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(BeginGuildPruneAsync), start, exception, $"guild {guildId}");
-            throw;
-        }
+        return TrackAsync(nameof(BeginGuildPruneAsync), LogLevel.Warning,
+            () => _inner.BeginGuildPruneAsync(guildId, request, reason, cancellationToken),
+            removed =>
+                $"Pruned {Report(removed)} members inactive for {days} days from guild {guildId}{Because(reason)}",
+            () => $"guild {guildId}",
+            removed => Emit(new GuildPruned(guildId, days, removed, reason)));
     }
 
-    public async Task<ThreadListing> GetActiveThreadsAsync(Snowflake guildId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<ThreadListing> GetActiveThreadsAsync(Snowflake guildId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetActiveThreadsAsync), LogLevel.Debug,
+            () => _inner.GetActiveThreadsAsync(guildId, cancellationToken),
+            listing => $"Fetched {listing.Count} active threads in guild {guildId}",
+            () => $"guild {guildId}");
 
-        try
-        {
-            var listing = await _inner.GetActiveThreadsAsync(guildId, cancellationToken);
-            Succeeded(nameof(GetActiveThreadsAsync), start, LogLevel.Debug,
-                $"Fetched {listing.Count} active threads in guild {guildId}");
-            return listing;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetActiveThreadsAsync), start, exception, $"guild {guildId}");
-            throw;
-        }
-    }
+    public Task<ThreadListing> GetPublicArchivedThreadsAsync(Snowflake channelId,
+        ArchivedThreadQuery? query = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetPublicArchivedThreadsAsync), LogLevel.Debug,
+            () => _inner.GetPublicArchivedThreadsAsync(channelId, query, cancellationToken),
+            listing => $"Fetched {listing.Count} public archived threads in channel {channelId}",
+            () => $"channel {channelId}");
 
-    public async Task<ThreadListing> GetPublicArchivedThreadsAsync(Snowflake channelId,
-        ArchivedThreadQuery? query = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<ThreadListing> GetPrivateArchivedThreadsAsync(Snowflake channelId,
+        ArchivedThreadQuery? query = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetPrivateArchivedThreadsAsync), LogLevel.Debug,
+            () => _inner.GetPrivateArchivedThreadsAsync(channelId, query, cancellationToken),
+            listing => $"Fetched {listing.Count} private archived threads in channel {channelId}",
+            () => $"channel {channelId}");
 
-        try
-        {
-            var listing = await _inner.GetPublicArchivedThreadsAsync(channelId, query, cancellationToken);
-            Succeeded(nameof(GetPublicArchivedThreadsAsync), start, LogLevel.Debug,
-                $"Fetched {listing.Count} public archived threads in channel {channelId}");
-            return listing;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetPublicArchivedThreadsAsync), start, exception, $"channel {channelId}");
-            throw;
-        }
-    }
+    public Task<ThreadListing> GetJoinedPrivateArchivedThreadsAsync(Snowflake channelId,
+        ArchivedThreadQuery? query = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetJoinedPrivateArchivedThreadsAsync), LogLevel.Debug,
+            () => _inner.GetJoinedPrivateArchivedThreadsAsync(channelId, query, cancellationToken),
+            listing => $"Fetched {listing.Count} joined private archived threads in channel {channelId}",
+            () => $"channel {channelId}");
 
-    public async Task<ThreadListing> GetPrivateArchivedThreadsAsync(Snowflake channelId,
-        ArchivedThreadQuery? query = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task JoinThreadAsync(Snowflake threadId, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(JoinThreadAsync), LogLevel.Information,
+            () => _inner.JoinThreadAsync(threadId, cancellationToken),
+            () => $"Joined thread {threadId}",
+            () => $"thread {threadId}",
+            () => Emit(new ThreadJoined(threadId)));
 
-        try
-        {
-            var listing = await _inner.GetPrivateArchivedThreadsAsync(channelId, query, cancellationToken);
-            Succeeded(nameof(GetPrivateArchivedThreadsAsync), start, LogLevel.Debug,
-                $"Fetched {listing.Count} private archived threads in channel {channelId}");
-            return listing;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetPrivateArchivedThreadsAsync), start, exception, $"channel {channelId}");
-            throw;
-        }
-    }
+    public Task LeaveThreadAsync(Snowflake threadId, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(LeaveThreadAsync), LogLevel.Information,
+            () => _inner.LeaveThreadAsync(threadId, cancellationToken),
+            () => $"Left thread {threadId}",
+            () => $"thread {threadId}",
+            () => Emit(new ThreadLeft(threadId)));
 
-    public async Task<ThreadListing> GetJoinedPrivateArchivedThreadsAsync(Snowflake channelId,
-        ArchivedThreadQuery? query = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task AddThreadMemberAsync(Snowflake threadId, Snowflake userId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(AddThreadMemberAsync), LogLevel.Information,
+            () => _inner.AddThreadMemberAsync(threadId, userId, cancellationToken),
+            () => $"Added user {userId} to thread {threadId}",
+            () => $"user {userId} in thread {threadId}",
+            () => Emit(new ThreadMemberAdded(threadId, userId)));
 
-        try
-        {
-            var listing = await _inner.GetJoinedPrivateArchivedThreadsAsync(channelId, query, cancellationToken);
-            Succeeded(nameof(GetJoinedPrivateArchivedThreadsAsync), start, LogLevel.Debug,
-                $"Fetched {listing.Count} joined private archived threads in channel {channelId}");
-            return listing;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetJoinedPrivateArchivedThreadsAsync), start, exception, $"channel {channelId}");
-            throw;
-        }
-    }
+    public Task RemoveThreadMemberAsync(Snowflake threadId, Snowflake userId,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(RemoveThreadMemberAsync), LogLevel.Information,
+            () => _inner.RemoveThreadMemberAsync(threadId, userId, cancellationToken),
+            () => $"Removed user {userId} from thread {threadId}",
+            () => $"user {userId} in thread {threadId}",
+            () => Emit(new ThreadMemberRemoved(threadId, userId)));
 
-    public async Task JoinThreadAsync(Snowflake threadId, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<DiscordThreadMember> GetThreadMemberAsync(Snowflake threadId, Snowflake userId,
+        bool withMember = false, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetThreadMemberAsync), LogLevel.Debug,
+            () => _inner.GetThreadMemberAsync(threadId, userId, withMember, cancellationToken),
+            _ => $"Fetched membership of {userId} in thread {threadId}",
+            () => $"user {userId} in thread {threadId}");
 
-        try
-        {
-            await _inner.JoinThreadAsync(threadId, cancellationToken);
-            Succeeded(nameof(JoinThreadAsync), start, LogLevel.Information, $"Joined thread {threadId}");
-            Emit(new ThreadJoined(threadId));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(JoinThreadAsync), start, exception, $"thread {threadId}");
-            throw;
-        }
-    }
+    public Task<IReadOnlyList<DiscordThreadMember>> GetThreadMembersAsync(Snowflake threadId,
+        bool withMember = false, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetThreadMembersAsync), LogLevel.Debug,
+            () => _inner.GetThreadMembersAsync(threadId, withMember, cancellationToken),
+            members => $"Fetched {members.Count} members of thread {threadId}",
+            () => $"thread {threadId}");
 
-    public async Task LeaveThreadAsync(Snowflake threadId, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
+    public Task<IReadOnlyList<DiscordCommandPermissions>> GetGuildCommandPermissionsAsync(
+        Snowflake applicationId, Snowflake guildId, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetGuildCommandPermissionsAsync), LogLevel.Debug,
+            () => _inner.GetGuildCommandPermissionsAsync(applicationId, guildId, cancellationToken),
+            permissions =>
+                $"Fetched {permissions.Count} command permission sets for {Scope(applicationId, guildId)}",
+            () => Scope(applicationId, guildId));
 
-        try
-        {
-            await _inner.LeaveThreadAsync(threadId, cancellationToken);
-            Succeeded(nameof(LeaveThreadAsync), start, LogLevel.Information, $"Left thread {threadId}");
-            Emit(new ThreadLeft(threadId));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(LeaveThreadAsync), start, exception, $"thread {threadId}");
-            throw;
-        }
-    }
-
-    public async Task AddThreadMemberAsync(Snowflake threadId, Snowflake userId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.AddThreadMemberAsync(threadId, userId, cancellationToken);
-            Succeeded(nameof(AddThreadMemberAsync), start, LogLevel.Information,
-                $"Added user {userId} to thread {threadId}");
-            Emit(new ThreadMemberAdded(threadId, userId));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(AddThreadMemberAsync), start, exception, $"user {userId} in thread {threadId}");
-            throw;
-        }
-    }
-
-    public async Task RemoveThreadMemberAsync(Snowflake threadId, Snowflake userId,
-        CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.RemoveThreadMemberAsync(threadId, userId, cancellationToken);
-            Succeeded(nameof(RemoveThreadMemberAsync), start, LogLevel.Information,
-                $"Removed user {userId} from thread {threadId}");
-            Emit(new ThreadMemberRemoved(threadId, userId));
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(RemoveThreadMemberAsync), start, exception, $"user {userId} in thread {threadId}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordThreadMember> GetThreadMemberAsync(Snowflake threadId, Snowflake userId,
-        bool withMember = false, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var member = await _inner.GetThreadMemberAsync(threadId, userId, withMember, cancellationToken);
-            Succeeded(nameof(GetThreadMemberAsync), start, LogLevel.Debug,
-                $"Fetched membership of {userId} in thread {threadId}");
-            return member;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetThreadMemberAsync), start, exception, $"user {userId} in thread {threadId}");
-            throw;
-        }
-    }
-
-    public async Task<IReadOnlyList<DiscordThreadMember>> GetThreadMembersAsync(Snowflake threadId,
-        bool withMember = false, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var members = await _inner.GetThreadMembersAsync(threadId, withMember, cancellationToken);
-            Succeeded(nameof(GetThreadMembersAsync), start, LogLevel.Debug,
-                $"Fetched {members.Count} members of thread {threadId}");
-            return members;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetThreadMembersAsync), start, exception, $"thread {threadId}");
-            throw;
-        }
-    }
-
-    public async Task<IReadOnlyList<DiscordCommandPermissions>> GetGuildCommandPermissionsAsync(
-        Snowflake applicationId, Snowflake guildId, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var permissions = await _inner.GetGuildCommandPermissionsAsync(applicationId, guildId, cancellationToken);
-            Succeeded(nameof(GetGuildCommandPermissionsAsync), start, LogLevel.Debug,
-                $"Fetched {permissions.Count} command permission sets for {Scope(applicationId, guildId)}");
-            return permissions;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetGuildCommandPermissionsAsync), start, exception, Scope(applicationId, guildId));
-            throw;
-        }
-    }
-
-    public async Task<DiscordCommandPermissions> GetCommandPermissionsAsync(Snowflake applicationId,
-        Snowflake guildId, Snowflake commandId, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var permissions =
-                await _inner.GetCommandPermissionsAsync(applicationId, guildId, commandId, cancellationToken);
-            Succeeded(nameof(GetCommandPermissionsAsync), start, LogLevel.Debug,
-                $"Fetched {permissions.Permissions.Count} permissions for command {commandId} in guild {guildId}");
-            return permissions;
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(GetCommandPermissionsAsync), start, exception,
-                $"command {commandId} in {Scope(applicationId, guildId)}");
-            throw;
-        }
-    }
+    public Task<DiscordCommandPermissions> GetCommandPermissionsAsync(Snowflake applicationId,
+        Snowflake guildId, Snowflake commandId, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(GetCommandPermissionsAsync), LogLevel.Debug,
+            () => _inner.GetCommandPermissionsAsync(applicationId, guildId, commandId, cancellationToken),
+            permissions =>
+                $"Fetched {permissions.Permissions.Count} permissions for command {commandId} in guild {guildId}",
+            () => $"command {commandId} in {Scope(applicationId, guildId)}");
 
     private static string Report(int? removed) => removed?.ToString() ?? "an unreported number of";
 
@@ -1914,6 +838,86 @@ public sealed class LoggingDiscordRest : IDiscordRest, IContextAware
 
     private static string Because(string? reason) =>
         string.IsNullOrWhiteSpace(reason) ? string.Empty : $" (reason: {reason})";
+
+    private async IAsyncEnumerable<DiscordMessage> TrackMessagesAsync(IAsyncEnumerable<DiscordMessage> source,
+        Snowflake channelId, Func<int, string> succeeded,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var start = Stopwatch.GetTimestamp();
+        var count = 0;
+
+        var messages = source.GetAsyncEnumerator(cancellationToken);
+
+        try
+        {
+            while (true)
+            {
+                DiscordMessage message;
+
+                try
+                {
+                    if (!await messages.MoveNextAsync())
+                        break;
+
+                    message = messages.Current;
+                }
+                catch (Exception exception)
+                {
+                    Failed(nameof(GetMessagesAsync), start, exception, $"channel {channelId} after {count} messages");
+                    throw;
+                }
+
+                count++;
+                yield return message;
+            }
+        }
+        finally
+        {
+            await messages.DisposeAsync();
+        }
+
+        Succeeded(nameof(GetMessagesAsync), start, LogLevel.Debug, succeeded(count));
+    }
+
+    private async Task<T> TrackAsync<T>(string operation, LogLevel level, Func<Task<T>> action,
+        Func<T, string> succeeded, Func<string> failed, Action<T>? emit = null)
+    {
+        var start = Stopwatch.GetTimestamp();
+
+        try
+        {
+            var result = await action();
+
+            Succeeded(operation, start, level, succeeded(result));
+            emit?.Invoke(result);
+
+            return result;
+        }
+        catch (Exception exception)
+        {
+            Failed(operation, start, exception, failed());
+            throw;
+        }
+    }
+
+    private async Task TrackAsync(string operation, LogLevel level, Func<Task> action,
+        Func<string> succeeded, Func<string> failed, Action? emit = null)
+    {
+        var start = Stopwatch.GetTimestamp();
+
+        try
+        {
+            await action();
+
+            Succeeded(operation, start, level, succeeded());
+            emit?.Invoke();
+        }
+        catch (Exception exception)
+        {
+            Failed(operation, start, exception, failed());
+            throw;
+        }
+    }
 
     private void Succeeded(string operation, long start, LogLevel level, string message)
     {

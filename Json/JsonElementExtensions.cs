@@ -39,6 +39,17 @@ internal static class JsonElementExtensions
         _ => null
     };
 
+    public static DiscordEmoji RequireEmoji(this JsonElement element, string name)
+    {
+        if (element.Property(name) is not { } emoji)
+            throw new JsonException($"Expected an emoji property named '{name}'.");
+
+        return new DiscordEmoji(
+            emoji.StringOrNull("name") ?? string.Empty,
+            emoji.SnowflakeOrNull("id"),
+            emoji.Flag("animated"));
+    }
+
     public static bool Flag(this JsonElement element, string name) =>
         element.Property(name) is { ValueKind: JsonValueKind.True };
 

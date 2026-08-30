@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Crovus.Logs;
 
 namespace Crovus.Cache;
@@ -14,6 +15,8 @@ public sealed class MemoryCacheStore<TKey, TValue> : ICacheStore<TKey, TValue> w
     private readonly Lock _gate = new();
     private readonly Dictionary<TKey, LinkedListNode<Entry>> _index;
     private readonly LinkedList<Entry> _order = new();
+
+    private long _version;
 
     public MemoryCacheStore(string name, CachePolicy policy, ILogger? logger = null, ITelemetry? telemetry = null,
         TimeProvider? timeProvider = null)
@@ -37,28 +40,55 @@ public sealed class MemoryCacheStore<TKey, TValue> : ICacheStore<TKey, TValue> w
         }
     }
 
-    public ValueTask<TValue?> GetAsync(TKey key, CancellationToken cancellationToken = default)
+    public long Version => Interlocked.Read(ref _version);
+
+    public bool TryGet(TKey key, [MaybeNullWhen(false)] out TValue value)
     {
+        value = default;
+
         if (!_policy.Enabled)
-            return ValueTask.FromResult<TValue?>(default);
+            return false;
 
         lock (_gate)
         {
             if (!_index.TryGetValue(key, out var node))
-                return ValueTask.FromResult<TValue?>(default);
+                return false;
 
             if (node.Value.ExpiresAt is { } expiry && _time.GetUtcNow() >= expiry)
             {
                 Evict(node, "expired");
-                return ValueTask.FromResult<TValue?>(default);
+                return false;
             }
 
             _order.Remove(node);
             _order.AddFirst(node);
 
-            return ValueTask.FromResult<TValue?>(node.Value.Value);
+            value = node.Value.Value;
+
+            return value is not null;
         }
     }
+
+    public IReadOnlyList<TValue> Snapshot()
+    {
+        if (!_policy.Enabled)
+            return [];
+
+        lock (_gate)
+        {
+            var now = _time.GetUtcNow();
+            var values = new List<TValue>(_index.Count);
+
+            foreach (var entry in _order)
+                if (entry.ExpiresAt is not { } expiry || now < expiry)
+                    values.Add(entry.Value);
+
+            return values;
+        }
+    }
+
+    public ValueTask<TValue?> GetAsync(TKey key, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<TValue?>(TryGet(key, out var value) ? value : default);
 
     public ValueTask SetAsync(TKey key, TValue value, CancellationToken cancellationToken = default)
     {
@@ -68,6 +98,8 @@ public sealed class MemoryCacheStore<TKey, TValue> : ICacheStore<TKey, TValue> w
         lock (_gate)
         {
             var expiresAt = _policy.Lifetime is { } lifetime ? _time.GetUtcNow() + lifetime : (DateTimeOffset?)null;
+
+            Interlocked.Increment(ref _version);
 
             if (_index.TryGetValue(key, out var existing))
             {
@@ -98,6 +130,8 @@ public sealed class MemoryCacheStore<TKey, TValue> : ICacheStore<TKey, TValue> w
             _index.Remove(key);
             _order.Remove(node);
 
+            Interlocked.Increment(ref _version);
+
             return ValueTask.FromResult(true);
         }
     }
@@ -111,7 +145,10 @@ public sealed class MemoryCacheStore<TKey, TValue> : ICacheStore<TKey, TValue> w
             _order.Clear();
 
             if (removed > 0)
+            {
+                Interlocked.Increment(ref _version);
                 _logger.LogDebug($"Cleared {removed} entries from {_name}");
+            }
         }
 
         return ValueTask.CompletedTask;
@@ -121,6 +158,8 @@ public sealed class MemoryCacheStore<TKey, TValue> : ICacheStore<TKey, TValue> w
     {
         _index.Remove(node.Value.Key);
         _order.Remove(node);
+
+        Interlocked.Increment(ref _version);
 
         if (_logger.IsEnabled(LogLevel.Trace))
             _logger.LogTrace($"Evicted an entry from {_name} ({reason})");

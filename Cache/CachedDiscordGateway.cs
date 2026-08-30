@@ -93,16 +93,27 @@ public sealed class CachedDiscordGateway : IDiscordGateway
                     await CacheMemberAsync(data, cancellationToken);
                     break;
 
+                case "GUILD_MEMBERS_CHUNK":
+                    await CacheMembersAsync(data, cancellationToken);
+                    break;
+
                 case "GUILD_MEMBER_REMOVE":
                     if (data.Property("user") is { } departed)
                         await _cache.RemoveMemberAsync(data.RequireSnowflake("guild_id"),
                             departed.RequireSnowflake("id"), cancellationToken);
                     break;
 
+                case "GUILD_EMOJIS_UPDATE":
+                    await CacheEmojisAsync(data, cancellationToken);
+                    break;
+
                 case "GUILD_ROLE_CREATE":
                 case "GUILD_ROLE_UPDATE":
+                    await CacheRoleAsync(data, cancellationToken);
+                    break;
+
                 case "GUILD_ROLE_DELETE":
-                    await _cache.RemoveGuildRolesAsync(data.RequireSnowflake("guild_id"), cancellationToken);
+                    await RemoveRoleAsync(data, cancellationToken);
                     break;
 
                 case "GUILD_BAN_ADD":
@@ -122,6 +133,10 @@ public sealed class CachedDiscordGateway : IDiscordGateway
                 case "CHANNEL_DELETE":
                 case "THREAD_DELETE":
                     await _cache.RemoveChannelAsync(data.RequireSnowflake("id"), cancellationToken);
+                    break;
+
+                case "THREAD_LIST_SYNC":
+                    await CacheChannelsAsync(data, "threads", data.RequireSnowflake("guild_id"), cancellationToken);
                     break;
 
                 case "MESSAGE_CREATE":
@@ -181,10 +196,17 @@ public sealed class CachedDiscordGateway : IDiscordGateway
             return;
         }
 
-        if (data.Deserialize<DiscordGuild>(DiscordJson.Options) is { } guild)
-            await _cache.SetGuildAsync(guild, cancellationToken);
+        if (data.Deserialize<DiscordGuild>(DiscordJson.Options) is not { } guild)
+            return;
 
-        await CacheGuildChannelsAsync(data, cancellationToken);
+        await _cache.SetGuildAsync(guild, cancellationToken);
+
+        await CacheChannelsAsync(data, "channels", guild.Id, cancellationToken);
+        await CacheChannelsAsync(data, "threads", guild.Id, cancellationToken);
+
+        foreach (var member in data.DeserializeList<DiscordMember>("members", DiscordJson.Options))
+            await _cache.SetMemberAsync(guild.Id, member.GuildId is null ? member.In(guild.Id) : member,
+                cancellationToken);
     }
 
     private async ValueTask CacheMemberAsync(JsonElement data, CancellationToken cancellationToken)
@@ -197,15 +219,63 @@ public sealed class CachedDiscordGateway : IDiscordGateway
         await _cache.SetMemberAsync(guildId, member.GuildId is null ? member.In(guildId) : member, cancellationToken);
     }
 
-    private async ValueTask CacheGuildChannelsAsync(JsonElement data, CancellationToken cancellationToken)
+    private async ValueTask CacheMembersAsync(JsonElement data, CancellationToken cancellationToken)
     {
-        if (data.Property("channels") is not { ValueKind: JsonValueKind.Array } channels)
+        var guildId = data.RequireSnowflake("guild_id");
+
+        foreach (var member in data.DeserializeList<DiscordMember>("members", DiscordJson.Options))
+            await _cache.SetMemberAsync(guildId, member.GuildId is null ? member.In(guildId) : member,
+                cancellationToken);
+    }
+
+    private async ValueTask CacheEmojisAsync(JsonElement data, CancellationToken cancellationToken)
+    {
+        var guildId = data.RequireSnowflake("guild_id");
+
+        if (await _cache.GetGuildAsync(guildId, cancellationToken) is not { } guild)
+            return;
+
+        var emojis = data.DeserializeList<DiscordGuildEmoji>("emojis", DiscordJson.Options);
+
+        await _cache.SetGuildAsync(guild with { Emojis = emojis }, cancellationToken);
+    }
+
+    private async ValueTask CacheRoleAsync(JsonElement data, CancellationToken cancellationToken)
+    {
+        var guildId = data.RequireSnowflake("guild_id");
+
+        if (data.Deserialize<DiscordRole>("role", DiscordJson.Options) is not { } role)
+            return;
+
+        if (await _cache.GetGuildRolesAsync(guildId, cancellationToken) is not { } roles)
+            return;
+
+        await _cache.SetGuildRolesAsync(guildId,
+            roles.Where(existing => existing.Id != role.Id).Append(role).ToArray(), cancellationToken);
+    }
+
+    private async ValueTask RemoveRoleAsync(JsonElement data, CancellationToken cancellationToken)
+    {
+        var guildId = data.RequireSnowflake("guild_id");
+        var roleId = data.RequireSnowflake("role_id");
+
+        if (await _cache.GetGuildRolesAsync(guildId, cancellationToken) is not { } roles)
+            return;
+
+        await _cache.SetGuildRolesAsync(guildId, roles.Where(role => role.Id != roleId).ToArray(), cancellationToken);
+    }
+
+    private async ValueTask CacheChannelsAsync(JsonElement data, string property, Snowflake guildId,
+        CancellationToken cancellationToken)
+    {
+        if (data.Property(property) is not { ValueKind: JsonValueKind.Array } channels)
             return;
 
         foreach (var element in channels.EnumerateArray())
         {
             if (element.Deserialize<DiscordChannel>(DiscordJson.Options) is { } channel)
-                await _cache.SetChannelAsync(channel, cancellationToken);
+                await _cache.SetChannelAsync(channel.GuildId is null ? channel.In(guildId) : channel,
+                    cancellationToken);
         }
     }
 
@@ -221,14 +291,5 @@ public sealed class CachedDiscordGateway : IDiscordGateway
         }
     }
 
-    private static DiscordEmoji ReadEmoji(JsonElement data)
-    {
-        if (data.Property("emoji") is not { } emoji)
-            throw new JsonException("The reaction payload has no emoji.");
-
-        return new DiscordEmoji(
-            emoji.StringOrNull("name") ?? string.Empty,
-            emoji.SnowflakeOrNull("id"),
-            emoji.Flag("animated"));
-    }
+    private static DiscordEmoji ReadEmoji(JsonElement data) => data.RequireEmoji("emoji");
 }
