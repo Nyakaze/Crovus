@@ -156,12 +156,50 @@ public sealed class LoggingDiscordRest : IDiscordRest, IContextAware
             _ => Emit(new WebhookExecuted(webhook.Id.Value, webhook.ChannelId.Value, threadId?.Value, wait)));
     }
 
-    public Task<DiscordMessage> EditWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
-        MessageEditRequest request, Snowflake? threadId = null, CancellationToken cancellationToken = default) =>
-        TrackAsync(nameof(EditWebhookMessageAsync), LogLevel.Information,
-            () => _inner.EditWebhookMessageAsync(webhook, messageId, request, threadId, cancellationToken),
-            _ => $"Edited webhook message {messageId} of webhook {webhook.Id}",
-            () => $"webhook message {messageId} of webhook {webhook.Id}");
+    public async Task<DiscordMessage> EditWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
+        MessageEditRequest request, Snowflake? threadId = null, CancellationToken cancellationToken = default)
+    {
+        var start = Stopwatch.GetTimestamp();
+
+        try
+        {
+            var message = await _inner.EditWebhookMessageAsync(webhook, messageId, request, threadId,
+                cancellationToken);
+            Succeeded(nameof(EditWebhookMessageAsync), start, LogLevel.Information,
+                $"Edited webhook message {messageId} of webhook {webhook.Id}");
+            return message;
+        }
+        catch (Exception exception)
+        {
+            Failed(nameof(EditWebhookMessageAsync), start, exception,
+                $"webhook message {messageId} of webhook {webhook.Id}");
+            throw;
+        }
+    }
+
+    public async Task DeleteWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
+        Snowflake? threadId = null, CancellationToken cancellationToken = default)
+    {
+        var start = Stopwatch.GetTimestamp();
+
+        try
+        {
+            await _inner.DeleteWebhookMessageAsync(webhook, messageId, threadId, cancellationToken);
+            Succeeded(nameof(DeleteWebhookMessageAsync), start, LogLevel.Information,
+                $"Deleted webhook message {messageId} of webhook {webhook.Id}");
+        }
+        catch (Exception exception)
+        {
+            Failed(nameof(DeleteWebhookMessageAsync), start, exception,
+                $"webhook message {messageId} of webhook {webhook.Id}");
+            throw;
+        }
+    }
+
+    public async Task<DiscordChannel> CreateChannelAsync(Snowflake guildId, ChannelCreateRequest request,
+        string? reason = null, CancellationToken cancellationToken = default)
+    {
+        var start = Stopwatch.GetTimestamp();
 
     public Task DeleteWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
         Snowflake? threadId = null, CancellationToken cancellationToken = default) =>
