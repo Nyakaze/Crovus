@@ -177,30 +177,6 @@ public sealed class LoggingDiscordRest : IDiscordRest, IContextAware
         }
     }
 
-    public async Task DeleteWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
-        Snowflake? threadId = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            await _inner.DeleteWebhookMessageAsync(webhook, messageId, threadId, cancellationToken);
-            Succeeded(nameof(DeleteWebhookMessageAsync), start, LogLevel.Information,
-                $"Deleted webhook message {messageId} of webhook {webhook.Id}");
-        }
-        catch (Exception exception)
-        {
-            Failed(nameof(DeleteWebhookMessageAsync), start, exception,
-                $"webhook message {messageId} of webhook {webhook.Id}");
-            throw;
-        }
-    }
-
-    public async Task<DiscordChannel> CreateChannelAsync(Snowflake guildId, ChannelCreateRequest request,
-        string? reason = null, CancellationToken cancellationToken = default)
-    {
-        var start = Stopwatch.GetTimestamp();
-
     public Task DeleteWebhookMessageAsync(DiscordWebhook webhook, Snowflake messageId,
         Snowflake? threadId = null, CancellationToken cancellationToken = default) =>
         TrackAsync(nameof(DeleteWebhookMessageAsync), LogLevel.Information,
