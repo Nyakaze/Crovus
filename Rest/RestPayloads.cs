@@ -3,6 +3,10 @@ using Crovus.Models;
 
 namespace Crovus.Rest;
 
+internal sealed record AttachmentRefreshPayload(IReadOnlyList<string> AttachmentUrls);
+
+internal sealed record AttachmentRefreshResponse(IReadOnlyList<DiscordAttachmentRefresh> RefreshedUrls);
+
 internal sealed record AttachmentPayload(string Id, string? Filename, string? Description)
 {
     public static IReadOnlyList<AttachmentPayload>? Build(IReadOnlyList<DiscordFile>? files,

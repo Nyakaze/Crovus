@@ -54,6 +54,10 @@ public sealed class CachedDiscordRest : IDiscordRest, IContextAware
         return channel;
     }
 
+    public Task<IReadOnlyList<DiscordAttachmentRefresh>> RefreshAttachmentUrlsAsync(
+        IReadOnlyList<string> attachmentUrls, CancellationToken cancellationToken = default) =>
+        _inner.RefreshAttachmentUrlsAsync(attachmentUrls, cancellationToken);
+
     public async Task<DiscordMessage> GetMessageAsync(Snowflake channelId, Snowflake messageId,
         CancellationToken cancellationToken = default)
     {

@@ -43,6 +43,13 @@ public sealed class LoggingDiscordRest : IDiscordRest, IContextAware
             _ => $"Fetched channel {channelId}",
             () => $"channel {channelId}");
 
+    public Task<IReadOnlyList<DiscordAttachmentRefresh>> RefreshAttachmentUrlsAsync(
+        IReadOnlyList<string> attachmentUrls, CancellationToken cancellationToken = default) =>
+        TrackAsync(nameof(RefreshAttachmentUrlsAsync), LogLevel.Debug,
+            () => _inner.RefreshAttachmentUrlsAsync(attachmentUrls, cancellationToken),
+            result => $"Refreshed {result.Count} attachment url(s)",
+            () => $"{attachmentUrls.Count} attachment url(s)");
+
     public Task<DiscordMessage> GetMessageAsync(Snowflake channelId, Snowflake messageId,
         CancellationToken cancellationToken = default) =>
         TrackAsync(nameof(GetMessageAsync), LogLevel.Debug,

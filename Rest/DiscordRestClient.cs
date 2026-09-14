@@ -76,6 +76,26 @@ public sealed class DiscordRestClient : IDiscordRest, IContextAware
         return await ReadAsync<DiscordChannel>(response, route, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<DiscordAttachmentRefresh>> RefreshAttachmentUrlsAsync(
+        IReadOnlyList<string> attachmentUrls, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(attachmentUrls);
+
+        if (attachmentUrls.Count == 0)
+            return [];
+
+        var route = RouteKey.Post("/attachments/refresh-urls");
+        var payload = new AttachmentRefreshPayload(attachmentUrls);
+
+        using var response = await SendAsync(route, "attachments/refresh-urls",
+            () => JsonContent.Create(payload, options: DiscordJson.Options),
+            cancellationToken: cancellationToken);
+
+        var refreshed = await ReadAsync<AttachmentRefreshResponse>(response, route, cancellationToken);
+
+        return refreshed.RefreshedUrls ?? [];
+    }
+
     public async Task<DiscordMessage> GetMessageAsync(Snowflake channelId, Snowflake messageId,
         CancellationToken cancellationToken = default)
     {

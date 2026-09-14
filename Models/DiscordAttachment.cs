@@ -5,3 +5,5 @@ public sealed record DiscordAttachment(Snowflake Id, string FileName, string Url
 {
     public bool IsImage => Width is not null && Height is not null;
 }
+
+public sealed record DiscordAttachmentRefresh(string Original, string Refreshed);

@@ -6,6 +6,9 @@ public interface IDiscordRest : IAsyncDisposable
 {
     Task<DiscordChannel> GetChannelAsync(Snowflake channelId, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<DiscordAttachmentRefresh>> RefreshAttachmentUrlsAsync(IReadOnlyList<string> attachmentUrls,
+        CancellationToken cancellationToken = default);
+
     Task<DiscordMessage> GetMessageAsync(Snowflake channelId, Snowflake messageId,
         CancellationToken cancellationToken = default);
 
