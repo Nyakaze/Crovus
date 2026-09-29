@@ -10,6 +10,7 @@ public sealed class MessageFactory
     private readonly List<DiscordFile> _files = [];
     private readonly StringBuilder _content = new();
 
+    private DiscordAllowedMentions? _allowedMentions;
     private ComponentFactory? _components;
     private List<Snowflake>? _keptAttachments;
     private DiscordMessageReference? _reference;
@@ -294,11 +295,20 @@ public sealed class MessageFactory
         return this;
     }
 
+    public MessageFactory WithAllowedMentions(DiscordAllowedMentions? allowedMentions)
+    {
+        _allowedMentions = allowedMentions;
+
+        return this;
+    }
+
+    public MessageFactory SuppressMentions() => WithAllowedMentions(DiscordAllowedMentions.None);
+
     public MessageCreateRequest Build() =>
-        new(Content(), Embeds(), _reference, _tts, Files(), Rows());
+        new(Content(), Embeds(), _reference, _tts, Files(), Rows(), _allowedMentions);
 
     public MessageEditRequest BuildEdit() =>
-        new(Content(), Embeds(), Files(), _keptAttachments?.ToArray(), Rows());
+        new(Content(), Embeds(), Files(), _keptAttachments?.ToArray(), Rows(), _allowedMentions);
 
     public WebhookExecuteRequest BuildWebhookExecute(string? username = null, string? avatarUrl = null,
         string? threadName = null) =>

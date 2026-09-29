@@ -7,6 +7,7 @@ public sealed class InteractionResponseFactory
     private readonly List<DiscordEmbed> _embeds = [];
     private readonly List<DiscordFile> _files = [];
 
+    private DiscordAllowedMentions? _allowedMentions;
     private ComponentFactory? _components;
     private List<Snowflake>? _keptAttachments;
     private string? _content;
@@ -206,6 +207,15 @@ public sealed class InteractionResponseFactory
         return this;
     }
 
+    public InteractionResponseFactory WithAllowedMentions(DiscordAllowedMentions? allowedMentions)
+    {
+        _allowedMentions = allowedMentions;
+
+        return this;
+    }
+
+    public InteractionResponseFactory SuppressMentions() => WithAllowedMentions(DiscordAllowedMentions.None);
+
     public InteractionResponseFactory AsEphemeral(bool ephemeral = true)
     {
         _ephemeral = ephemeral;
@@ -228,7 +238,8 @@ public sealed class InteractionResponseFactory
 
     public InteractionMessageRequest Build() =>
         new(_content, _embeds.Count == 0 ? null : _embeds.ToArray(), _ephemeral, _tts, _flags,
-            _files.Count == 0 ? null : _files.ToArray(), _keptAttachments?.ToArray(), _components?.Build());
+            _files.Count == 0 ? null : _files.ToArray(), _keptAttachments?.ToArray(), _components?.Build(),
+            _allowedMentions);
 
     public InteractionResponseRequest BuildResponse(
         InteractionCallbackType type = InteractionCallbackType.ChannelMessageWithSource) =>

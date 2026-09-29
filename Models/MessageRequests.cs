@@ -2,11 +2,14 @@ namespace Crovus.Models;
 
 public sealed record MessageCreateRequest(string? Content = null, IReadOnlyList<DiscordEmbed>? Embeds = null,
     DiscordMessageReference? Reply = null, bool Tts = false, IReadOnlyList<DiscordFile>? Files = null,
-    IReadOnlyList<DiscordComponent>? Components = null)
+    IReadOnlyList<DiscordComponent>? Components = null, DiscordAllowedMentions? AllowedMentions = null)
 {
     public bool HasFiles => Files is { Count: > 0 };
 
     public bool HasComponents => Components is { Count: > 0 };
+
+    public MessageCreateRequest WithAllowedMentions(DiscordAllowedMentions? allowedMentions) =>
+        this with { AllowedMentions = allowedMentions };
 
     public MessageCreateRequest Showing(params DiscordComponent[] components) =>
         this with { Components = [.. Components ?? [], .. components] };
@@ -28,13 +31,16 @@ public sealed record MessageCreateRequest(string? Content = null, IReadOnlyList<
 
 public sealed record MessageEditRequest(string? Content = null, IReadOnlyList<DiscordEmbed>? Embeds = null,
     IReadOnlyList<DiscordFile>? Files = null, IReadOnlyList<Snowflake>? KeptAttachments = null,
-    IReadOnlyList<DiscordComponent>? Components = null)
+    IReadOnlyList<DiscordComponent>? Components = null, DiscordAllowedMentions? AllowedMentions = null)
 {
     public bool HasFiles => Files is { Count: > 0 };
 
     public bool HasComponents => Components is { Count: > 0 };
 
     public bool RewritesAttachments => HasFiles || KeptAttachments is not null;
+
+    public MessageEditRequest WithAllowedMentions(DiscordAllowedMentions? allowedMentions) =>
+        this with { AllowedMentions = allowedMentions };
 
     public MessageEditRequest Showing(params DiscordComponent[] components) =>
         this with { Components = [.. Components ?? [], .. components] };
