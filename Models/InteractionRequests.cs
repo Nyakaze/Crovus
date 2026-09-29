@@ -3,9 +3,12 @@ namespace Crovus.Models;
 public sealed record InteractionMessageRequest(string? Content = null, IReadOnlyList<DiscordEmbed>? Embeds = null,
     bool Ephemeral = false, bool Tts = false, MessageFlags Flags = MessageFlags.None,
     IReadOnlyList<DiscordFile>? Files = null, IReadOnlyList<Snowflake>? KeptAttachments = null,
-    IReadOnlyList<DiscordComponent>? Components = null)
+    IReadOnlyList<DiscordComponent>? Components = null, DiscordAllowedMentions? AllowedMentions = null)
 {
     public MessageFlags EffectiveFlags => Ephemeral ? Flags | MessageFlags.Ephemeral : Flags;
+
+    public InteractionMessageRequest WithAllowedMentions(DiscordAllowedMentions? allowedMentions) =>
+        this with { AllowedMentions = allowedMentions };
 
     public bool HasFiles => Files is { Count: > 0 };
 

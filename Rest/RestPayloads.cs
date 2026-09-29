@@ -32,28 +32,62 @@ internal sealed record AttachmentPayload(string Id, string? Filename, string? De
     }
 }
 
+internal sealed record AllowedMentionsPayload(
+    IReadOnlyList<string> Parse,
+    IReadOnlyList<Snowflake>? Users,
+    IReadOnlyList<Snowflake>? Roles,
+    bool RepliedUser)
+{
+    public static AllowedMentionsPayload? Build(DiscordAllowedMentions? allowedMentions)
+    {
+        if (allowedMentions is null)
+            return null;
+
+        allowedMentions.Validate();
+
+        var parse = new List<string>(3);
+
+        if (allowedMentions.Parse.HasFlag(MentionTypes.Users))
+            parse.Add("users");
+
+        if (allowedMentions.Parse.HasFlag(MentionTypes.Roles))
+            parse.Add("roles");
+
+        if (allowedMentions.Parse.HasFlag(MentionTypes.Everyone))
+            parse.Add("everyone");
+
+        return new AllowedMentionsPayload(parse,
+            allowedMentions.Users.Count == 0 ? null : allowedMentions.Users,
+            allowedMentions.Roles.Count == 0 ? null : allowedMentions.Roles,
+            allowedMentions.RepliedUser);
+    }
+}
+
 internal sealed record MessageCreatePayload(
     string? Content,
     IReadOnlyList<DiscordEmbed>? Embeds,
     DiscordMessageReference? MessageReference,
     bool Tts,
     IReadOnlyList<AttachmentPayload>? Attachments = null,
-    IReadOnlyList<DiscordComponent>? Components = null)
+    IReadOnlyList<DiscordComponent>? Components = null,
+    AllowedMentionsPayload? AllowedMentions = null)
 {
     public static MessageCreatePayload From(MessageCreateRequest request) =>
         new(request.Content, request.Embeds, request.Reply, request.Tts, AttachmentPayload.Build(request.Files),
-            request.Components);
+            request.Components, AllowedMentionsPayload.Build(request.AllowedMentions));
 }
 
 internal sealed record MessageEditPayload(
     string? Content,
     IReadOnlyList<DiscordEmbed>? Embeds,
     IReadOnlyList<AttachmentPayload>? Attachments = null,
-    IReadOnlyList<DiscordComponent>? Components = null)
+    IReadOnlyList<DiscordComponent>? Components = null,
+    AllowedMentionsPayload? AllowedMentions = null)
 {
     public static MessageEditPayload From(MessageEditRequest request) =>
         new(request.Content, request.Embeds,
-            AttachmentPayload.Build(request.Files, request.KeptAttachments), request.Components);
+            AttachmentPayload.Build(request.Files, request.KeptAttachments), request.Components,
+            AllowedMentionsPayload.Build(request.AllowedMentions));
 }
 
 internal sealed record WebhookCreatePayload(
@@ -171,12 +205,14 @@ internal sealed record InteractionMessagePayload(
     MessageFlags? Flags,
     bool Tts,
     IReadOnlyList<AttachmentPayload>? Attachments = null,
-    IReadOnlyList<DiscordComponent>? Components = null)
+    IReadOnlyList<DiscordComponent>? Components = null,
+    AllowedMentionsPayload? AllowedMentions = null)
 {
     public static InteractionMessagePayload From(InteractionMessageRequest request) =>
         new(request.Content, request.Embeds,
             request.EffectiveFlags is MessageFlags.None ? null : request.EffectiveFlags, request.Tts,
-            AttachmentPayload.Build(request.Files, request.KeptAttachments), request.Components);
+            AttachmentPayload.Build(request.Files, request.KeptAttachments), request.Components,
+            AllowedMentionsPayload.Build(request.AllowedMentions));
 }
 
 internal sealed record InteractionModalPayload(
