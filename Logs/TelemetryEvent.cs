@@ -228,3 +228,15 @@ public sealed record ThreadMemberAdded(ulong ThreadId, ulong UserId) : Telemetry
 public sealed record ThreadMemberRemoved(ulong ThreadId, ulong UserId) : TelemetryEvent;
 
 public sealed record AttachmentsUploaded(string Method, string Route, int Files, long Bytes) : TelemetryEvent;
+
+public sealed record RichPresenceStateChanged(string Previous, string Current, string? Failure) : TelemetryEvent;
+
+public sealed record RichPresenceConnected(string PipeName, ulong UserId) : TelemetryEvent;
+
+public sealed record RichPresenceActivitySent(bool Cleared, TimeSpan Latency) : TelemetryEvent;
+
+public sealed record RichPresenceActivityRejected(int? Code, string Reason) : TelemetryEvent;
+
+public sealed record RichPresenceActivityThrottled(TimeSpan Delay) : TelemetryEvent;
+
+public sealed record RichPresenceReconnectScheduled(int Attempt, TimeSpan Delay, string Reason) : TelemetryEvent;
