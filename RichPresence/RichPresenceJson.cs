@@ -100,6 +100,7 @@ public static class RichPresenceJson
     {
         writer.WriteStartObject("activity");
         writer.WriteNumber("type", (int)activity.Type);
+        WriteOptional(writer, "name", activity.Name);
 
         if (activity.StatusDisplay is { } display)
             writer.WriteNumber("status_display_type", (int)display);

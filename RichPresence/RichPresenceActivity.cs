@@ -23,6 +23,8 @@ public sealed record RichPresenceActivity
 {
     public ActivityType Type { get; init; } = ActivityType.Playing;
 
+    public string? Name { get; init; }
+
     public RichPresenceStatusDisplay? StatusDisplay { get; init; }
 
     public string? Details { get; init; }
@@ -77,6 +79,7 @@ public sealed record RichPresenceActivity
         if (Type is not (ActivityType.Playing or ActivityType.Listening or ActivityType.Watching or ActivityType.Competing))
             problems.Add($"Activity type {Type} cannot be set over Rich Presence; use Playing, Listening, Watching or Competing.");
 
+        CheckText(problems, "name", Name);
         CheckText(problems, "details", Details);
         CheckText(problems, "state", State);
         CheckUrl(problems, "details URL", DetailsUrl);
