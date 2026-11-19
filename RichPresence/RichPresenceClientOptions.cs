@@ -31,5 +31,7 @@ public sealed record RichPresenceClientOptions
 
     public TimeSpan UpdateWindow { get; init; } = RichPresenceLimits.UpdateWindow;
 
+    public TimeSpan? RefreshInterval { get; init; }
+
     public static RichPresenceClientOptions For(Snowflake applicationId) => new() { ApplicationId = applicationId };
 }

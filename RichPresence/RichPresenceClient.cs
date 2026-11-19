@@ -385,7 +385,32 @@ public sealed class RichPresenceClient : IAsyncDisposable
                     _sentVersion = version;
             }
 
+            await WaitForChangeAsync(cancellationToken);
+        }
+    }
+
+    private async Task WaitForChangeAsync(CancellationToken cancellationToken)
+    {
+        if (_options.RefreshInterval is not { } refresh)
+        {
             await _wake.Reader.ReadAsync(cancellationToken);
+            return;
+        }
+
+        using var quiet = new CancellationTokenSource(refresh, _time);
+        using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, quiet.Token);
+
+        try
+        {
+            await _wake.Reader.ReadAsync(wait.Token);
+        }
+        catch (OperationCanceledException) when (quiet.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            lock (_gate)
+            {
+                if (_desired is not null && _sentVersion == _desiredVersion)
+                    _sentVersion = -1;
+            }
         }
     }
 
